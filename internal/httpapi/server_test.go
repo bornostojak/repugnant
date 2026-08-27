@@ -1,10 +1,13 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"github.com/bornostojak/repugnant/internal/store"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -17,5 +20,35 @@ func TestHealth(t *testing.T) {
 	}
 	if recorder.Body.String() != "{\"status\":\"ok\"}\n" {
 		t.Fatalf("body = %q", recorder.Body.String())
+	}
+}
+
+func TestProjectArticleAndShortRedirect(t *testing.T) {
+	db, err := store.Open("sqlite", "file:httpapi-test?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	server := NewWithStore(slog.New(slog.NewTextHandler(io.Discard, nil)), db).Handler()
+	project := httptest.NewRecorder()
+	server.ServeHTTP(project, httptest.NewRequest(http.MethodPost, "/api/projects", strings.NewReader(`{"name":"Test Project"}`)))
+	if project.Code != http.StatusCreated {
+		t.Fatalf("project %d %s", project.Code, project.Body.String())
+	}
+	var p map[string]string
+	_ = json.Unmarshal(project.Body.Bytes(), &p)
+	article := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/projects/test-project/articles", strings.NewReader(`{"title":"Hello","body":"world"}`))
+	req.Header.Set("X-RPG-API-Key", p["api_key"])
+	server.ServeHTTP(article, req)
+	if article.Code != http.StatusCreated {
+		t.Fatalf("article %d %s", article.Code, article.Body.String())
+	}
+	var a map[string]any
+	_ = json.Unmarshal(article.Body.Bytes(), &a)
+	redirect := httptest.NewRecorder()
+	server.ServeHTTP(redirect, httptest.NewRequest(http.MethodGet, "/"+a["short_id"].(string), nil))
+	if redirect.Code != http.StatusFound {
+		t.Fatalf("redirect %d", redirect.Code)
 	}
 }

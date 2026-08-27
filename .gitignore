@@ -1,6 +1,7 @@
 .rpg/
 .env
 data/
+rpg.db
 web/node_modules/
 web/dist/
 *.tsbuildinfo

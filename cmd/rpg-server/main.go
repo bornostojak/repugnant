@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/bornostojak/repugnant/internal/store"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,10 +15,17 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	address := os.Getenv("RPG_HTTP_ADDR")
 	if address == "" {
-		address = ":8080"
+		address = "0.0.0.0:8080"
 	}
+	driver, dsn := os.Getenv("RPG_DB_DRIVER"), os.Getenv("RPG_DB_DSN")
+	database, err := store.Open(driver, dsn)
+	if err != nil {
+		logger.Error("open database", "error", err)
+		os.Exit(1)
+	}
+	defer database.Close()
 	logger.Info("starting rpg server", "address", address)
-	if err := http.ListenAndServe(address, httpapi.New(logger).Handler()); err != nil {
+	if err := http.ListenAndServe(address, httpapi.NewWithStore(logger, database).Handler()); err != nil {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
