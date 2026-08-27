@@ -12,10 +12,11 @@ const ConfigFileName = "rpg.conf.yaml"
 
 // Config controls generation and publishing for one documented repository.
 type Config struct {
-	Version int          `yaml:"version"`
-	Langs   []string     `yaml:"langs,omitempty"`
-	Output  OutputConfig `yaml:"output"`
-	Hooks   HookConfig   `yaml:"hooks"`
+	Version int           `yaml:"version"`
+	Langs   []string      `yaml:"langs,omitempty"`
+	Output  OutputConfig  `yaml:"output"`
+	Hooks   HookConfig    `yaml:"hooks"`
+	Project ProjectConfig `yaml:"project"`
 }
 
 type OutputConfig struct {
@@ -35,6 +36,11 @@ type WebOutputConfig struct {
 
 type HookConfig struct {
 	OnPublishFailure string `yaml:"on_publish_failure"`
+}
+type ProjectConfig struct {
+	Slug   string `yaml:"slug,omitempty"`
+	APIURL string `yaml:"api_url,omitempty"`
+	APIKey string `yaml:"api_key,omitempty"`
 }
 
 func DefaultConfig() Config {
@@ -76,6 +82,9 @@ func (c Config) Validate() error {
 	}
 	if c.Hooks.OnPublishFailure != "block" && c.Hooks.OnPublishFailure != "allow_pending" {
 		return fmt.Errorf("rpg.conf.yaml: hooks.on_publish_failure must be block or allow_pending")
+	}
+	if c.Output.Web.Enabled && (c.Project.Slug == "" || c.Project.APIURL == "" || c.Project.APIKey == "") {
+		return fmt.Errorf("rpg.conf.yaml: project.slug, project.api_url, and project.api_key are required for web output")
 	}
 	return nil
 }
