@@ -16,11 +16,27 @@ type Store struct {
 	db       *sql.DB
 	postgres bool
 }
-type Project struct{ Slug, Name, APIKey string }
+// Project and Article are serialized directly by the JSON API handlers, so
+// their tags are the wire contract the web UI's TypeScript types are written
+// against. APIKey is deliberately excluded: it is only ever returned by the
+// explicit, hand-built response in createProject, never by a bulk listing.
+type Project struct {
+	Slug   string `json:"slug"`
+	Name   string `json:"name"`
+	APIKey string `json:"-"`
+}
 type Article struct {
-	ID, ShortID, ProjectSlug, Title, Body, Category, Tags, SourcePath, SourceRange string
-	Revision                                                                       int
-	CreatedAt                                                                      time.Time
+	ID          string    `json:"id"`
+	ShortID     string    `json:"short_id"`
+	ProjectSlug string    `json:"project_slug"`
+	Title       string    `json:"title"`
+	Body        string    `json:"body"`
+	Category    string    `json:"category"`
+	Tags        string    `json:"tags"`
+	SourcePath  string    `json:"source_path"`
+	SourceRange string    `json:"source_range"`
+	Revision    int       `json:"revision"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (s *Store) ListProjects() ([]Project, error) {

@@ -179,19 +179,19 @@ file, line, article ID, and the exact fix — every time.
 
 ## Screenshots
 
-> The images below are faithful renderings of a real local run — same categories, same titles, same two-revision article, same teal accent color and layout as the actual `web/` build — captured as illustrations rather than a live browser screenshot in this environment. Every string of data shown was produced by the real CLI and server (see [How it works](#how-it-works) above for the raw output).
+> Real captures from a locally running build (`go run ./cmd/rpg-server` + the built `web/`), taken with Playwright against live data — not mockups.
 
 **The web wiki** is a single page: a project switcher and full-text search on the left, the selected article in the center, and organization/history controls on the right. No separate "homepage" — the whole workspace is one screen, live-searchable and keyboard-navigable.
 
-![rePugnant web workspace: topbar, project intro, category tree, article reader, and history sidebar](assets/readme/web-overview.svg)
+![rePugnant web workspace: topbar, project intro, category tree, article reader, and history sidebar](assets/readme/web-overview.png)
 
 **The documentation tree** groups articles by the `Category/Subcategory` path you gave them in the annotation, with tags and full-text search layered on top:
 
-![Sidebar documentation tree grouped by category, with the active article highlighted](assets/readme/web-tree.svg)
+![Sidebar documentation tree grouped by category, with the active article highlighted](assets/readme/web-tree.png)
 
 **Revision history** is never destructive. Every push appends; the reader can jump to any past revision, and a banner offers a one-click way back to latest:
 
-![Article reader showing revision 2 of "Stampede guard" with its revision-history sidebar](assets/readme/web-revision2.svg)
+![Article reader showing revision 2 of "Stampede guard" with its revision-history sidebar](assets/readme/web-revision2.png)
 
 ## Install & quick start
 

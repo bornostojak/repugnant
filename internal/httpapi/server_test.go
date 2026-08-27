@@ -80,6 +80,24 @@ func TestProjectArticleAndShortRedirect(t *testing.T) {
 	if unknown.Code != http.StatusNotFound {
 		t.Fatalf("/d/{unknown id} = %d", unknown.Code)
 	}
+
+	// The web UI's TypeScript types read lowercase/snake_case JSON keys
+	// (project.slug, article.short_id, ...). Project/Article previously had
+	// no json tags at all, so Go's default encoder emitted PascalCase field
+	// names instead and every list/tree/reader view silently rendered blank.
+	projects := httptest.NewRecorder()
+	server.ServeHTTP(projects, httptest.NewRequest(http.MethodGet, "/api/projects", nil))
+	if !strings.Contains(projects.Body.String(), `"slug":"test-project"`) {
+		t.Fatalf("project JSON is missing the lowercase \"slug\" key the frontend reads: %s", projects.Body.String())
+	}
+	if strings.Contains(projects.Body.String(), "api_key") || strings.Contains(projects.Body.String(), "APIKey") {
+		t.Fatalf("project listing must never expose the API key: %s", projects.Body.String())
+	}
+	list := httptest.NewRecorder()
+	server.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/projects/test-project/articles", nil))
+	if !strings.Contains(list.Body.String(), `"title":"Hello"`) || !strings.Contains(list.Body.String(), `"short_id"`) {
+		t.Fatalf("article JSON is missing lowercase keys the frontend reads: %s", list.Body.String())
+	}
 }
 
 // A built web/dist is not available in this test, but WithWeb must still let

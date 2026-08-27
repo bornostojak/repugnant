@@ -23,10 +23,26 @@ function App() {
   const [newName, setNewName] = useState('')
   const [created, setCreated] = useState<CreatedProject | null>(null)
   const [error, setError] = useState('')
-  const refreshProjects = () => json<Project[]>('/api/projects').then(items => { setProjects(items); if (!active && items[0]) setActive(items[0].slug) }).catch(e => setError(String(e)))
+  // A stable link (/p/{slug}/article/{id}/{revision}, pushed by select()
+  // below) only works if a direct visit or page refresh restores that exact
+  // article and revision instead of always landing on the first project.
+  const deepLink = useMemo(() => {
+    const match = location.pathname.match(/^\/p\/([^/]+)\/article\/([^/]+)\/(\d+)$/)
+    return match ? { slug: match[1], id: match[2], revision: Number(match[3]) } : null
+  }, [])
+  const refreshProjects = () => json<Project[]>('/api/projects').then(items => { setProjects(items); if (!active && items[0]) setActive(deepLink && items.some(project => project.slug === deepLink.slug) ? deepLink.slug : items[0].slug) }).catch(e => setError(String(e)))
   const refreshArticles = () => { if (active) void json<Article[]>(`/api/projects/${active}/articles?q=${encodeURIComponent(query)}`).then(setArticles).catch(e => setError(String(e))) }
   useEffect(() => { void refreshProjects() }, [])
   useEffect(() => { refreshArticles() }, [active, query])
+  useEffect(() => {
+    if (!deepLink || selected || active !== deepLink.slug) return
+    const target = articles.find(article => article.id === deepLink.id)
+    if (!target) return
+    json<Article[]>(`/api/projects/${active}/articles/${target.id}/revisions`).then(items => {
+      setRevisions(items)
+      setSelected(items.find(revision => revision.revision === deepLink.revision) || target)
+    }).catch(e => setError(String(e)))
+  }, [articles, deepLink, active, selected])
   const grouped = useMemo(() => articles.reduce<Record<string, Article[]>>((all, article) => { const key = article.category || 'Uncategorised'; (all[key] ||= []).push(article); return all }, {}), [articles])
   const select = (article: Article) => { setSelected(article); setView('docs'); json<Article[]>(`/api/projects/${active}/articles/${article.id}/revisions`).then(setRevisions).catch(e => setError(String(e))); history.replaceState({}, '', `/p/${active}/article/${article.id}/${article.revision}`) }
   const createProject = (event: FormEvent) => { event.preventDefault(); setError(''); json<CreatedProject>('/api/projects', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:newName}) }).then(result => { setCreated(result); setNewName(''); refreshProjects(); setActive(result.slug) }).catch(e => setError(String(e))) }
