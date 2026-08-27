@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/bornostojak/repugnant/internal/store"
@@ -31,6 +33,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/projects", s.createProject)
 		mux.HandleFunc("GET /api/projects", s.listProjects)
 		mux.HandleFunc("GET /api/projects/{slug}/articles", s.listArticles)
+		mux.HandleFunc("GET /api/projects/{slug}/articles/{id}", s.getArticle)
 		mux.HandleFunc("GET /api/projects/{slug}/articles/{id}/revisions", s.listRevisions)
 		mux.HandleFunc("POST /api/projects/{slug}/articles", s.createArticle)
 		mux.HandleFunc("GET /p/{slug}/article/{id}/{revision}", s.articlePage)
@@ -40,6 +43,14 @@ func (s *Server) Handler() http.Handler {
 }
 func (s *Server) listRevisions(w http.ResponseWriter, r *http.Request) {
 	a, e := s.store.Revisions(r.PathValue("slug"), r.PathValue("id"))
+	if e != nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, 200, a)
+}
+func (s *Server) getArticle(w http.ResponseWriter, r *http.Request) {
+	a, e := s.store.FindArticle(r.PathValue("slug"), r.PathValue("id"))
 	if e != nil {
 		http.NotFound(w, r)
 		return
@@ -69,8 +80,13 @@ func WithWeb(api http.Handler, dir string) http.Handler {
 			http.ServeFile(w, r, dir+"/index.html")
 			return
 		}
-		if _, e := os.Stat(dir + r.URL.Path); e == nil {
+		candidate := filepath.Join(dir, filepath.Clean(r.URL.Path))
+		if _, e := os.Stat(candidate); e == nil {
 			files.ServeHTTP(w, r)
+			return
+		}
+		if !strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/p/") && r.URL.Path != "/healthz" {
+			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
 			return
 		}
 		api.ServeHTTP(w, r)
@@ -85,8 +101,24 @@ func (s *Server) articlePage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if requested, err := strconv.Atoi(r.PathValue("revision")); err == nil && requested != a.Revision {
+		for _, revision := range mustRevisions(s.store, a.ProjectSlug, a.ID) {
+			if revision.Revision == requested {
+				a = revision
+				break
+			}
+		}
+		if requested != a.Revision {
+			http.NotFound(w, r)
+			return
+		}
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = articleTemplate.Execute(w, a)
+}
+func mustRevisions(database *store.Store, slug, id string) []store.Article {
+	values, _ := database.Revisions(slug, id)
+	return values
 }
 
 func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
@@ -120,20 +152,20 @@ func (s *Server) createArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		ID    string `json:"id"`
-		Title string `json:"title"`
-		Body  string `json:"body"`
+		ID, Title, Body, Category, SourcePath string
+		Tags                                  []string `json:"tags"`
 	}
 	if json.NewDecoder(r.Body).Decode(&in) != nil || in.Title == "" {
 		http.Error(w, "title is required", 400)
 		return
 	}
-	a, e := s.store.AddArticle(store.Article{ID: in.ID, ProjectSlug: slug, Title: in.Title, Body: in.Body})
+	tags, _ := json.Marshal(in.Tags)
+	a, e := s.store.AddArticle(store.Article{ID: in.ID, ProjectSlug: slug, Title: in.Title, Body: in.Body, Category: in.Category, Tags: string(tags), SourcePath: in.SourcePath})
 	if e != nil {
 		http.Error(w, "article could not be created", 409)
 		return
 	}
-	writeJSON(w, 201, map[string]any{"id": a.ID, "short_id": a.ShortID, "url": "/p/" + slug + "/article/" + a.ID + "/1", "short_url": "/" + a.ShortID})
+	writeJSON(w, 201, map[string]any{"id": a.ID, "short_id": a.ShortID, "revision": a.Revision, "url": "/p/" + slug + "/article/" + a.ID + "/" + strconv.Itoa(a.Revision), "short_url": "/" + a.ShortID})
 }
 func (s *Server) shortLink(w http.ResponseWriter, r *http.Request) {
 	a, e := s.store.FindShort(r.PathValue("shortID"))
@@ -141,7 +173,7 @@ func (s *Server) shortLink(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	http.Redirect(w, r, "/p/"+a.ProjectSlug+"/article/"+a.ID+"/"+strings.TrimSpace("1"), http.StatusFound)
+	http.Redirect(w, r, "/p/"+a.ProjectSlug+"/article/"+a.ID+"/"+strconv.Itoa(a.Revision), http.StatusFound)
 }
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

@@ -2,94 +2,212 @@ package docs
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
-	"github.com/bornostojak/repugnant/internal/project"
+	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
+
+	"github.com/bornostojak/repugnant/internal/project"
 )
 
+const manifestName = "manifest.json"
+
+type manifest struct {
+	Articles map[string]manifestArticle `json:"articles"`
+}
+type manifestArticle struct {
+	Path, QuoteHash, Title, Category string
+	Tags                             []string
+	Revision                         int
+}
+
+// Generate only creates docs for new markers, appends explicit revisions, and
+// rejects silent changes to tracked quote regions. Hand-edited Markdown is not
+// regenerated or overwritten.
 func Generate(root string) (int, error) {
-	c, e := project.Load(root)
-	if e != nil {
-		return 0, e
+	c, err := project.Load(root)
+	if err != nil {
+		return 0, err
 	}
 	if !c.Output.Docs.Enabled {
 		return 0, nil
 	}
 	out := filepath.Join(root, c.Output.Docs.Dir)
-	if e = os.MkdirAll(out, 0755); e != nil {
-		return 0, e
+	if err = os.MkdirAll(out, 0o755); err != nil {
+		return 0, err
 	}
-	n := 0
-	e = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
+	m, err := loadManifest(root)
+	if err != nil {
+		return 0, err
+	}
+	name, email := gitIdentity(root)
+	changed := 0
+	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-		if d.IsDir() {
-			switch d.Name() {
-			case ".git", ".rpg", "docs", "node_modules":
+		if entry.IsDir() {
+			if path != root && (path == out || entry.Name() == ".git" || entry.Name() == ".rpg" || entry.Name() == "node_modules") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		data, e := os.ReadFile(path)
-		if e != nil {
-			return e
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
 		}
-		fs, e := Parse(path, string(data))
-		if e != nil {
-			return e
+		findings, err := Parse(path, string(data))
+		if err != nil {
+			return err
 		}
-		for _, f := range fs {
-			if f.Kind != "article" && f.Kind != "quote" {
-				continue
+		if len(findings) == 0 {
+			return nil
+		}
+		lines := strings.Split(string(data), "\n")
+		fileChanged := false
+		for _, f := range findings {
+			rel, _ := filepath.Rel(root, path)
+			switch f.Kind {
+			case "article", "quote":
+				id := newID()
+				a := Article{ID: id, Title: f.Title, Category: f.Category, Tags: f.Tags, Markdown: f.Markdown, Quote: f.Quote, Revision: 1, Path: rel}
+				if err := os.WriteFile(filepath.Join(out, id+".md"), []byte(Render(a, name, email, time.Now().UTC(), webArticleURL(c, id))), 0o644); err != nil {
+					return err
+				}
+				m.Articles[id] = manifestArticle{Path: rel, QuoteHash: quoteHash(f.Quote), Title: f.Title, Category: f.Category, Tags: f.Tags, Revision: 1}
+				lines[f.Start] = replaceMarker(lines[f.Start], id)
+				fileChanged, changed = true, changed+1
+			case "tracked":
+				record, known := m.Articles[f.ID]
+				if !known {
+					return fmt.Errorf("%s:%d: rPg ID %q is not in .rpg/%s; restore the manifest or replace this marker with a new $rPg annotation", rel, f.Start+1, f.ID, manifestName)
+				}
+				if f.Quote != "" && record.QuoteHash != quoteHash(f.Quote) {
+					return fmt.Errorf("%s:%d: documented quote changed for %s; add $rPg@%s: explain the change above the quote, followed by $~ Markdown and !rPg", rel, f.Start+1, f.ID, f.ID)
+				}
+			case "revision":
+				record, known := m.Articles[f.ID]
+				if !known {
+					return fmt.Errorf("%s:%d: revision references unknown rPg ID %q", rel, f.Start+1, f.ID)
+				}
+				if err := appendRevision(filepath.Join(out, f.ID+".md"), f, record); err != nil {
+					return fmt.Errorf("%s:%d: %w", rel, f.Start+1, err)
+				}
+				record.Revision++
+				if f.Title != "" {
+					record.Title = f.Title
+				}
+				if f.Quote != "" {
+					record.QuoteHash = quoteHash(f.Quote)
+				}
+				m.Articles[f.ID] = record
+				lines[f.Start] = replaceMarker(lines[f.Start], f.ID)
+				fileChanged, changed = true, changed+1
 			}
-			id := newID()
-			title, tags := titleTags(f.Title)
-			a := Article{ID: id, Title: title, Tags: tags, Markdown: f.Markdown, Quote: f.Quote, Revision: 1, Path: path}
-			if e = os.WriteFile(filepath.Join(out, id+".md"), []byte(Render(a, "Unknown", "unknown", time.Now().UTC())), 0644); e != nil {
-				return e
-			}
-			lines := strings.Split(string(data), "\n")
-			line := lines[f.Start]
-			idx := strings.Index(line, "$rPg")
-			if idx < 0 {
-				idx = strings.Index(line, "?rPg")
-			}
-			if idx >= 0 {
-				lines[f.Start] = line[:idx] + "rPg: " + id
-			}
-			if e = os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); e != nil {
-				return e
-			}
-			n++
+		}
+		if fileChanged {
+			return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 		}
 		return nil
 	})
-	return n, e
+	if err != nil {
+		return changed, err
+	}
+	if changed > 0 {
+		err = saveManifest(root, m)
+	}
+	return changed, err
+}
+
+func loadManifest(root string) (manifest, error) {
+	m := manifest{Articles: map[string]manifestArticle{}}
+	b, err := os.ReadFile(filepath.Join(root, ".rpg", manifestName))
+	if os.IsNotExist(err) {
+		return m, nil
+	}
+	if err != nil {
+		return m, err
+	}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return m, fmt.Errorf("read .rpg/%s: %w", manifestName, err)
+	}
+	if m.Articles == nil {
+		m.Articles = map[string]manifestArticle{}
+	}
+	return m, nil
+}
+func saveManifest(root string, m manifest) error {
+	if err := os.MkdirAll(filepath.Join(root, ".rpg"), 0o755); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(root, ".rpg", manifestName), append(b, '\n'), 0o600)
+}
+func quoteHash(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 func newID() string {
 	b := make([]byte, 9)
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
-func titleTags(s string) (string, []string) {
-	s = strings.TrimSpace(s)
-	if strings.Contains(s, ",") {
-		p := strings.Split(s, ",")
-		return strings.TrimSpace(p[0]), trimAll(p[1:])
+func replaceMarker(line, id string) string {
+	for _, marker := range []string{"$rPg@", "$rPg", "?rPg"} {
+		if i := strings.Index(line, marker); i >= 0 {
+			return line[:i] + "rPg: " + id
+		}
 	}
-	if strings.Contains(s, "/") {
-		p := strings.Split(s, "/")
-		return strings.TrimSpace(p[len(p)-1]), nil
-	}
-	return s, nil
+	return line
 }
-func trimAll(v []string) []string {
-	for i := range v {
-		v[i] = strings.TrimSpace(v[i])
+func gitIdentity(root string) (string, string) {
+	get := func(key, fallback string) string {
+		out, err := exec.Command("git", "-C", root, "config", "--get", key).Output()
+		if err != nil || strings.TrimSpace(string(out)) == "" {
+			return fallback
+		}
+		return strings.TrimSpace(string(out))
 	}
-	return v
+	return get("user.name", "Unknown"), get("user.email", "unknown")
+}
+func webArticleURL(c project.Config, id string) string {
+	if !c.Output.Web.Enabled {
+		return ""
+	}
+	return strings.TrimRight(c.Output.Web.Endpoint, "/") + "/d/" + id
+}
+
+var revisionMetadata = regexp.MustCompile(`(?m)^\| Revision \| \d+ \|$`)
+
+func appendRevision(path string, f Finding, record manifestArticle) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read existing article: %w", err)
+	}
+	revision := record.Revision + 1
+	content := revisionMetadata.ReplaceAllString(string(b), fmt.Sprintf("| Revision | %d |", revision))
+	var add strings.Builder
+	fmt.Fprintf(&add, "\n# Revision %d\n\n", revision)
+	if len(f.Markdown) > 0 {
+		add.WriteString(strings.Join(f.Markdown, "\n"))
+		add.WriteString("\n")
+	}
+	if f.Quote != "" {
+		add.WriteString("\n## Documented code\n\n```\n")
+		add.WriteString(f.Quote)
+		add.WriteString("\n```\n")
+	}
+	if len(f.Markdown) == 0 && f.Quote == "" {
+		add.WriteString("Revision recorded from source annotation.\n")
+	}
+	return os.WriteFile(path, []byte(strings.TrimRight(content, "\n")+"\n"+add.String()), 0o644)
 }

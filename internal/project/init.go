@@ -34,7 +34,6 @@ if [ -x "$0.rpg-backup" ]; then
   "$0.rpg-backup" "$@" || exit $?
 fi
 rpg hook pre-commit || exit $?
-git add docs
 `
 
 const prePushHook = `#!/bin/sh

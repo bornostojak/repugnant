@@ -38,6 +38,15 @@ func Parse(path, source string) ([]Finding, error) {
 		}
 		if kind == "revision" {
 			f.ID, f.Title = splitRevision(payload)
+			if f.ID == "" {
+				return nil, fmt.Errorf("%s:%d: $rPg@ requires an article ID", path, i+1)
+			}
+		}
+		if kind == "article" || kind == "quote" {
+			f.Category, f.Title, f.Tags = parseDescriptor(payload)
+			if f.Title == "" {
+				return nil, fmt.Errorf("%s:%d: rPg title is required", path, i+1)
+			}
 		}
 		j := i + 1
 		for j < len(lines) {
@@ -52,7 +61,7 @@ func Parse(path, source string) ([]Finding, error) {
 			}
 			break
 		}
-		if kind == "quote" || kind == "stable" {
+		if kind == "quote" || kind == "stable" || kind == "revision" {
 			end := -1
 			for k := j; k < len(lines); k++ {
 				b, ok := commentBody(lines[k], prefix)
@@ -66,7 +75,7 @@ func Parse(path, source string) ([]Finding, error) {
 				f.End = end
 				if kind == "stable" {
 					f.Kind = "tracked"
-				} else {
+				} else if kind == "quote" {
 					f.Kind = "quote"
 				}
 			} else if kind == "quote" {
@@ -74,11 +83,34 @@ func Parse(path, source string) ([]Finding, error) {
 			}
 		}
 		results = append(results, f)
-		if f.Kind == "quote" || f.Kind == "tracked" {
+		if f.Kind == "quote" || f.Kind == "tracked" || (f.Kind == "revision" && f.End > f.Start) {
 			i = f.End
 		}
 	}
 	return results, nil
+}
+
+// parseDescriptor turns $rPg(Category/Subcategory/Title, tag, tag) into
+// separately stored organization data. Colon syntax intentionally stays a
+// simple unstructured title for fast inline notes.
+func parseDescriptor(s string) (category, title string, tags []string) {
+	parts := strings.Split(s, ",")
+	head := strings.TrimSpace(parts[0])
+	path := strings.Split(head, "/")
+	if len(path) > 1 {
+		category = strings.Join(trimAll(path[:len(path)-1]), "/")
+		title = strings.TrimSpace(path[len(path)-1])
+	} else {
+		title = head
+	}
+	if len(parts) > 1 {
+		for _, tag := range trimAll(parts[1:]) {
+			if tag != "" {
+				tags = append(tags, tag)
+			}
+		}
+	}
+	return category, title, tags
 }
 func commentBody(line, prefix string) (string, bool) {
 	t := strings.TrimLeft(line, " \t")
@@ -134,4 +166,12 @@ func unindent(s string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func trimAll(values []string) []string {
+	result := make([]string, len(values))
+	for i, value := range values {
+		result[i] = strings.TrimSpace(value)
+	}
+	return result
 }
