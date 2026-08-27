@@ -76,8 +76,17 @@ func Parse(path, source string) ([]Finding, error) {
 			end := -1
 			for k := j; k < len(lines); k++ {
 				b, ok := commentBody(lines[k], prefix)
-				if ok && strings.TrimSpace(b) == "!rPg" {
+				if !ok {
+					continue
+				}
+				if strings.TrimSpace(b) == "!rPg" {
 					end = k
+					break
+				}
+				if otherKind, _ := marker(b); otherKind != "" {
+					// A new rPg marker starts before any !rPg is found, so
+					// this marker does not own a quoted region: stop here
+					// instead of absorbing an unrelated later quote's !rPg.
 					break
 				}
 			}

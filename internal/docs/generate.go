@@ -49,6 +49,7 @@ func Generate(root string) (int, error) {
 	name, email := gitIdentity(root)
 	enabled := c.EnabledLanguages(root)
 	changed := 0
+	manifestDirty := false
 	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -95,6 +96,11 @@ func Generate(root string) (int, error) {
 				if f.Quote != "" && record.QuoteHash != quoteHash(f.Quote) {
 					return fmt.Errorf("%s:%d: documented quote changed for %s; add $rPg@%s: explain the change above the quote, followed by $~ Markdown and !rPg", rel, f.Start+1, f.ID, f.ID)
 				}
+				if newRange := sourceRange(f); record.Path != rel || record.SourceRange != newRange {
+					record.Path, record.SourceRange = rel, newRange
+					m.Articles[f.ID] = record
+					manifestDirty = true
+				}
 			case "revision":
 				record, known := m.Articles[f.ID]
 				if !known {
@@ -124,7 +130,7 @@ func Generate(root string) (int, error) {
 	if err != nil {
 		return changed, err
 	}
-	if changed > 0 {
+	if changed > 0 || manifestDirty {
 		err = saveManifest(root, m)
 	}
 	return changed, err
