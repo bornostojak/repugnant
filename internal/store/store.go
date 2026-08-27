@@ -145,12 +145,19 @@ func (s *Store) AddArticle(a Article) (Article, error) {
 	var current int
 	var oldShortID string
 	var oldTitle, oldBody, oldCategory, oldTags, oldSource string
-	err := s.db.QueryRow(s.q(`SELECT short_id,revision,title,body,category,tags,source_path FROM articles WHERE id=? AND project_slug=?`), a.ID, a.ProjectSlug).Scan(&oldShortID, &current, &oldTitle, &oldBody, &oldCategory, &oldTags, &oldSource)
+	var oldSourceRange string
+	err := s.db.QueryRow(s.q(`SELECT short_id,revision,title,body,category,tags,source_path,source_range FROM articles WHERE id=? AND project_slug=?`), a.ID, a.ProjectSlug).Scan(&oldShortID, &current, &oldTitle, &oldBody, &oldCategory, &oldTags, &oldSource, &oldSourceRange)
 	if err == nil {
 		a.ShortID = oldShortID
 		if oldTitle == a.Title && oldBody == a.Body && oldCategory == a.Category && oldTags == a.Tags && oldSource == a.SourcePath {
 			a.Revision, a.CreatedAt = current, time.Now().UTC()
-			return a, nil
+			// Content is unchanged, but the documented code may have moved
+			// to different lines since the last publish; keep source_range
+			// current without treating a pure location change as a revision.
+			if oldSourceRange != a.SourceRange {
+				_, err = s.db.Exec(s.q(`UPDATE articles SET source_range=? WHERE id=? AND project_slug=?`), a.SourceRange, a.ID, a.ProjectSlug)
+			}
+			return a, err
 		}
 		a.Revision = current + 1
 		a.CreatedAt = time.Now().UTC()
@@ -181,6 +188,15 @@ func (s *Store) FindArticle(projectSlug, id string) (Article, error) {
 	e := s.db.QueryRow(s.q(`SELECT id,short_id,project_slug,title,body,category,tags,source_path,source_range,revision,created_at FROM articles WHERE project_slug=? AND id=?`), projectSlug, id).Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Category, &a.Tags, &a.SourcePath, &a.SourceRange, &a.Revision, &a.CreatedAt)
 	return a, e
 }
+
+// FindArticleByID resolves an article by its globally unique ID alone, with
+// no project slug required. Article IDs are the primary key, so this backs
+// the project-agnostic /d/{id} permalink embedded in every generated doc.
+func (s *Store) FindArticleByID(id string) (Article, error) {
+	var a Article
+	e := s.db.QueryRow(s.q(`SELECT id,short_id,project_slug,title,body,category,tags,source_path,source_range,revision,created_at FROM articles WHERE id=?`), id).Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Category, &a.Tags, &a.SourcePath, &a.SourceRange, &a.Revision, &a.CreatedAt)
+	return a, e
+}
 func normalizeTags(tags string) string {
 	var values []string
 	if json.Unmarshal([]byte(tags), &values) == nil {
@@ -194,7 +210,20 @@ func (s *Store) Revisions(projectSlug, id string) ([]Article, error) {
 	if e != nil {
 		return nil, e
 	}
-	rows, e := s.db.Query(s.q(`SELECT revision,title,body,created_at FROM article_revisions WHERE article_id=? ORDER BY revision DESC`), id)
+	return s.revisionsOf(a)
+}
+
+// RevisionsByID resolves revision history without a project slug, backing
+// the /d/{id}/{revision} permalink alongside FindArticleByID.
+func (s *Store) RevisionsByID(id string) ([]Article, error) {
+	a, e := s.FindArticleByID(id)
+	if e != nil {
+		return nil, e
+	}
+	return s.revisionsOf(a)
+}
+func (s *Store) revisionsOf(a Article) ([]Article, error) {
+	rows, e := s.db.Query(s.q(`SELECT revision,title,body,created_at FROM article_revisions WHERE article_id=? ORDER BY revision DESC`), a.ID)
 	if e != nil {
 		return nil, e
 	}

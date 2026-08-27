@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -55,4 +56,45 @@ func TestProjectArticleAndShortRedirect(t *testing.T) {
 	patch := httptest.NewRecorder()
 	server.ServeHTTP(patch, httptest.NewRequest(http.MethodPatch, "/api/projects/test-project/articles/"+a["id"].(string), strings.NewReader(`{"category":"Platform/Caching","tags":["cache"]}`)))
 	if patch.Code != http.StatusOK { t.Fatalf("organization patch %d %s", patch.Code, patch.Body.String()) }
+
+	// SPEC.md requires /d/{article-id} (latest) and /d/{article-id}/{revision}
+	// (historical) permalinks, with no project slug in the URL. Every
+	// generated local doc embeds exactly this link as its "Web" column.
+	doc := httptest.NewRecorder()
+	server.ServeHTTP(doc, httptest.NewRequest(http.MethodGet, "/d/"+a["id"].(string), nil))
+	if doc.Code != http.StatusOK || !strings.Contains(doc.Body.String(), "Hello") {
+		t.Fatalf("/d/{id} = %d %s", doc.Code, doc.Body.String())
+	}
+	revision := httptest.NewRecorder()
+	server.ServeHTTP(revision, httptest.NewRequest(http.MethodGet, "/d/"+a["id"].(string)+"/1", nil))
+	if revision.Code != http.StatusOK || !strings.Contains(revision.Body.String(), "Hello") {
+		t.Fatalf("/d/{id}/{revision} = %d %s", revision.Code, revision.Body.String())
+	}
+	missing := httptest.NewRecorder()
+	server.ServeHTTP(missing, httptest.NewRequest(http.MethodGet, "/d/"+a["id"].(string)+"/99", nil))
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("/d/{id}/{bad revision} = %d", missing.Code)
+	}
+	unknown := httptest.NewRecorder()
+	server.ServeHTTP(unknown, httptest.NewRequest(http.MethodGet, "/d/does-not-exist", nil))
+	if unknown.Code != http.StatusNotFound {
+		t.Fatalf("/d/{unknown id} = %d", unknown.Code)
+	}
+}
+
+// A built web/dist is not available in this test, but WithWeb must still let
+// /d/ requests fall through to the API handler instead of swallowing them
+// into the SPA's index.html fallback the way /p/ intentionally does.
+func TestWithWebPassesDocPermalinksToAPI(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/index.html", []byte("<html>spa</html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reached := false
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { reached = true })
+	handler := WithWeb(api, dir)
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/d/some-id", nil))
+	if !reached {
+		t.Fatal("/d/ request did not reach the API handler")
+	}
 }
