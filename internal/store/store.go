@@ -202,6 +202,22 @@ func (s *Store) Revisions(projectSlug, id string) ([]Article, error) {
 	}
 	return out, rows.Err()
 }
+
+// UpdateOrganization changes navigation metadata without modifying the article
+// body or creating a content revision. It is intentionally separate from
+// AddArticle so a drag-and-drop tree move cannot look like a documentation edit.
+func (s *Store) UpdateOrganization(projectSlug, id, category string, tags []string) (Article, error) {
+	a, err := s.FindArticle(projectSlug, id)
+	if err != nil {
+		return Article{}, err
+	}
+	encoded, _ := json.Marshal(tags)
+	if _, err = s.db.Exec(s.q(`UPDATE articles SET category=?,tags=? WHERE project_slug=? AND id=?`), category, string(encoded), projectSlug, id); err != nil {
+		return Article{}, err
+	}
+	a.Category, a.Tags = category, string(encoded)
+	return a, nil
+}
 func Slug(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	var b strings.Builder

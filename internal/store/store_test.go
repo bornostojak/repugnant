@@ -31,4 +31,8 @@ func TestSQLiteProjectAndArticle(t *testing.T) {
 	if err != nil || updated.Revision != 2 {
 		t.Fatalf("revision = %+v, err=%v", updated, err)
 	}
+	unchanged, err := s.AddArticle(Article{ID: a.ID, ProjectSlug: p.Slug, Title: "A revised", Body: "next"})
+	if err != nil || unchanged.Revision != 2 || unchanged.ShortID != a.ShortID { t.Fatalf("idempotent publish = %+v, err=%v", unchanged, err) }
+	organized, err := s.UpdateOrganization(p.Slug, a.ID, "Platform/Caching", []string{"cache", "fast"})
+	if err != nil || organized.Category != "Platform/Caching" || organized.Revision != 2 { t.Fatalf("organization = %+v, err=%v", organized, err) }
 }

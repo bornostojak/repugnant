@@ -51,4 +51,8 @@ func TestProjectArticleAndShortRedirect(t *testing.T) {
 	if redirect.Code != http.StatusFound {
 		t.Fatalf("redirect %d", redirect.Code)
 	}
+	if !strings.HasSuffix(redirect.Header().Get("Location"), "/1") { t.Fatalf("short redirect location = %q", redirect.Header().Get("Location")) }
+	patch := httptest.NewRecorder()
+	server.ServeHTTP(patch, httptest.NewRequest(http.MethodPatch, "/api/projects/test-project/articles/"+a["id"].(string), strings.NewReader(`{"category":"Platform/Caching","tags":["cache"]}`)))
+	if patch.Code != http.StatusOK { t.Fatalf("organization patch %d %s", patch.Code, patch.Body.String()) }
 }
