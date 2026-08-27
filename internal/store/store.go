@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
@@ -17,9 +18,9 @@ type Store struct {
 }
 type Project struct{ Slug, Name, APIKey string }
 type Article struct {
-	ID, ShortID, ProjectSlug, Title, Body string
-	Revision                              int
-	CreatedAt                             time.Time
+	ID, ShortID, ProjectSlug, Title, Body, Category, Tags, SourcePath string
+	Revision                                                          int
+	CreatedAt                                                         time.Time
 }
 
 func (s *Store) ListProjects() ([]Project, error) {
@@ -39,11 +40,11 @@ func (s *Store) ListProjects() ([]Project, error) {
 	return out, rows.Err()
 }
 func (s *Store) ListArticles(slug, query string) ([]Article, error) {
-	q := `SELECT id,short_id,project_slug,title,body,revision,created_at FROM articles WHERE project_slug=?`
+	q := `SELECT id,short_id,project_slug,title,body,category,tags,source_path,revision,created_at FROM articles WHERE project_slug=?`
 	args := []any{slug}
 	if query != "" {
-		q += ` AND (title LIKE ? OR body LIKE ?)`
-		args = append(args, "%"+query+"%", "%"+query+"%")
+		q += ` AND (title LIKE ? OR body LIKE ? OR category LIKE ? OR tags LIKE ?)`
+		args = append(args, "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%")
 	}
 	q += ` ORDER BY created_at DESC`
 	rows, e := s.db.Query(s.q(q), args...)
@@ -54,7 +55,7 @@ func (s *Store) ListArticles(slug, query string) ([]Article, error) {
 	var out []Article
 	for rows.Next() {
 		var a Article
-		if e = rows.Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Revision, &a.CreatedAt); e != nil {
+		if e = rows.Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Category, &a.Tags, &a.SourcePath, &a.Revision, &a.CreatedAt); e != nil {
 			return nil, e
 		}
 		out = append(out, a)
@@ -99,9 +100,9 @@ func (s *Store) q(query string) string {
 	return b.String()
 }
 func (s *Store) Migrate() error {
-	schema := `CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, name TEXT NOT NULL, api_key TEXT NOT NULL UNIQUE, created_at TIMESTAMP NOT NULL); CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, short_id TEXT NOT NULL UNIQUE, project_slug TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, revision INTEGER NOT NULL, created_at TIMESTAMP NOT NULL); CREATE TABLE IF NOT EXISTS article_revisions (article_id TEXT NOT NULL, revision INTEGER NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMP NOT NULL, PRIMARY KEY(article_id,revision));`
+	schema := `CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, name TEXT NOT NULL, api_key TEXT NOT NULL UNIQUE, created_at TIMESTAMP NOT NULL); CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, short_id TEXT NOT NULL UNIQUE, project_slug TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, category TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', source_path TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL, created_at TIMESTAMP NOT NULL); CREATE TABLE IF NOT EXISTS article_revisions (article_id TEXT NOT NULL, revision INTEGER NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMP NOT NULL, PRIMARY KEY(article_id,revision));`
 	if s.postgres {
-		schema = `CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, name TEXT NOT NULL, api_key TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL); CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, short_id TEXT NOT NULL UNIQUE, project_slug TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, revision INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL); CREATE TABLE IF NOT EXISTS article_revisions (article_id TEXT NOT NULL, revision INTEGER NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL, PRIMARY KEY(article_id,revision));`
+		schema = `CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, name TEXT NOT NULL, api_key TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL); CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, short_id TEXT NOT NULL UNIQUE, project_slug TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, category TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', source_path TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL); CREATE TABLE IF NOT EXISTS article_revisions (article_id TEXT NOT NULL, revision INTEGER NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL, PRIMARY KEY(article_id,revision));`
 	}
 	_, e := s.db.Exec(schema)
 	return e
@@ -133,12 +134,20 @@ func (s *Store) AddArticle(a Article) (Article, error) {
 	if a.ShortID == "" {
 		a.ShortID, _ = token(9)
 	}
+	a.Tags = normalizeTags(a.Tags)
 	var current int
-	err := s.db.QueryRow(s.q(`SELECT revision FROM articles WHERE id=? AND project_slug=?`), a.ID, a.ProjectSlug).Scan(&current)
+	var oldShortID string
+	var oldTitle, oldBody, oldCategory, oldTags, oldSource string
+	err := s.db.QueryRow(s.q(`SELECT short_id,revision,title,body,category,tags,source_path FROM articles WHERE id=? AND project_slug=?`), a.ID, a.ProjectSlug).Scan(&oldShortID, &current, &oldTitle, &oldBody, &oldCategory, &oldTags, &oldSource)
 	if err == nil {
+		a.ShortID = oldShortID
+		if oldTitle == a.Title && oldBody == a.Body && oldCategory == a.Category && oldTags == a.Tags && oldSource == a.SourcePath {
+			a.Revision, a.CreatedAt = current, time.Now().UTC()
+			return a, nil
+		}
 		a.Revision = current + 1
 		a.CreatedAt = time.Now().UTC()
-		_, err = s.db.Exec(s.q(`UPDATE articles SET title=?,body=?,revision=?,created_at=? WHERE id=? AND project_slug=?`), a.Title, a.Body, a.Revision, a.CreatedAt, a.ID, a.ProjectSlug)
+		_, err = s.db.Exec(s.q(`UPDATE articles SET title=?,body=?,category=?,tags=?,source_path=?,revision=?,created_at=? WHERE id=? AND project_slug=?`), a.Title, a.Body, a.Category, a.Tags, a.SourcePath, a.Revision, a.CreatedAt, a.ID, a.ProjectSlug)
 		if err == nil {
 			_, err = s.db.Exec(s.q(`INSERT INTO article_revisions(article_id,revision,title,body,created_at) VALUES(?,?,?,?,?)`), a.ID, a.Revision, a.Title, a.Body, a.CreatedAt)
 		}
@@ -149,7 +158,7 @@ func (s *Store) AddArticle(a Article) (Article, error) {
 	}
 	a.Revision = 1
 	a.CreatedAt = time.Now().UTC()
-	_, e := s.db.Exec(s.q(`INSERT INTO articles(id,short_id,project_slug,title,body,revision,created_at) VALUES(?,?,?,?,?,?,?)`), a.ID, a.ShortID, a.ProjectSlug, a.Title, a.Body, a.Revision, a.CreatedAt)
+	_, e := s.db.Exec(s.q(`INSERT INTO articles(id,short_id,project_slug,title,body,category,tags,source_path,revision,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)`), a.ID, a.ShortID, a.ProjectSlug, a.Title, a.Body, a.Category, a.Tags, a.SourcePath, a.Revision, a.CreatedAt)
 	if e == nil {
 		_, e = s.db.Exec(s.q(`INSERT INTO article_revisions(article_id,revision,title,body,created_at) VALUES(?,?,?,?,?)`), a.ID, a.Revision, a.Title, a.Body, a.CreatedAt)
 	}
@@ -157,13 +166,21 @@ func (s *Store) AddArticle(a Article) (Article, error) {
 }
 func (s *Store) FindShort(short string) (Article, error) {
 	var a Article
-	e := s.db.QueryRow(s.q(`SELECT id,short_id,project_slug,title,body,revision,created_at FROM articles WHERE short_id=?`), short).Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Revision, &a.CreatedAt)
+	e := s.db.QueryRow(s.q(`SELECT id,short_id,project_slug,title,body,category,tags,source_path,revision,created_at FROM articles WHERE short_id=?`), short).Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Category, &a.Tags, &a.SourcePath, &a.Revision, &a.CreatedAt)
 	return a, e
 }
 func (s *Store) FindArticle(projectSlug, id string) (Article, error) {
 	var a Article
-	e := s.db.QueryRow(s.q(`SELECT id,short_id,project_slug,title,body,revision,created_at FROM articles WHERE project_slug=? AND id=?`), projectSlug, id).Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Revision, &a.CreatedAt)
+	e := s.db.QueryRow(s.q(`SELECT id,short_id,project_slug,title,body,category,tags,source_path,revision,created_at FROM articles WHERE project_slug=? AND id=?`), projectSlug, id).Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Category, &a.Tags, &a.SourcePath, &a.Revision, &a.CreatedAt)
 	return a, e
+}
+func normalizeTags(tags string) string {
+	var values []string
+	if json.Unmarshal([]byte(tags), &values) == nil {
+		b, _ := json.Marshal(values)
+		return string(b)
+	}
+	return tags
 }
 func (s *Store) Revisions(projectSlug, id string) ([]Article, error) {
 	a, e := s.FindArticle(projectSlug, id)

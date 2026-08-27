@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func Push(root string) (int, error) {
@@ -18,6 +19,10 @@ func Push(root string) (int, error) {
 	}
 	if !c.Output.Web.Enabled {
 		return 0, fmt.Errorf("web output is disabled")
+	}
+	manifest, e := loadManifest(root)
+	if e != nil {
+		return 0, e
 	}
 	fs, e := filepath.Glob(filepath.Join(root, c.Output.Docs.Dir, "*.md"))
 	if e != nil {
@@ -36,7 +41,9 @@ func Push(root string) (int, error) {
 				break
 			}
 		}
-		p, _ := json.Marshal(map[string]string{"id": strings.TrimSuffix(filepath.Base(f), ".md"), "title": title, "body": string(b)})
+		id := strings.TrimSuffix(filepath.Base(f), ".md")
+		record := manifest.Articles[id]
+		p, _ := json.Marshal(map[string]any{"id": id, "title": title, "body": string(b), "category": record.Category, "tags": record.Tags, "source_path": record.Path})
 		r, e := http.NewRequest(http.MethodPost, c.Project.APIURL, bytes.NewReader(p))
 		if e != nil {
 			return n, e
@@ -54,4 +61,18 @@ func Push(root string) (int, error) {
 		n++
 	}
 	return n, nil
+}
+
+// RecordPending leaves a compact, ignored diagnostic for a later successful
+// rpg push. The Markdown itself remains authoritative in the configured docs
+// directory, so this cache cannot lose user edits.
+func RecordPending(root string, cause error) error {
+	if err := os.MkdirAll(filepath.Join(root, ".rpg"), 0o755); err != nil {
+		return err
+	}
+	payload, _ := json.MarshalIndent(map[string]string{"failed_at": time.Now().UTC().Format(time.RFC3339), "error": cause.Error()}, "", "  ")
+	if err := os.WriteFile(filepath.Join(root, ".rpg", "pending.json"), append(payload, '\n'), 0o600); err != nil {
+		return fmt.Errorf("save pending publish state: %w", err)
+	}
+	return nil
 }
