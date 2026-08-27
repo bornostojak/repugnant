@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 
 type Project = { slug: string; name: string }
-type Article = { id: string; title: string; body: string; revision: number; short_id: string; category: string; tags: string; source_path: string; created_at: string }
+type Article = { id: string; title: string; body: string; revision: number; short_id: string; category: string; tags: string; source_path: string; source_range: string; created_at: string }
 type CreatedProject = { slug: string; api_key: string; api_url: string }
 
 const json = <T,>(url: string, init?: RequestInit) => fetch(url, init).then(async response => {
@@ -47,6 +47,6 @@ function App() {
 function ArticleView({ article, revisions, onRevision }: { article: Article; revisions: Article[]; onRevision: (article: Article) => void }) {
   return <article className="article"><p className="eyebrow">{article.category || 'Uncategorised'} · revision {article.revision}</p><h1>{article.title}</h1><div className="tag-row">{tags(article).map(tag => <span key={tag}>{tag}</span>)}</div><pre>{article.body}</pre>{revisions.length > 1 && <p className="muted">Viewing a revision? <button onClick={() => onRevision(revisions[0])}>Return to latest</button></p>}</article>
 }
-function SourceView({ article }: { article: Article }) { return <article className="article"><p className="eyebrow">Documented source</p><h1>{article.source_path || 'Source location unavailable'}</h1><p>This article was published from the file above. The CLI keeps exact quote content in each revision.</p><pre>{article.body.match(/## Documented code[\s\S]*/)?.[0] || 'No quoted source block was recorded.'}</pre></article> }
+function SourceView({ article }: { article: Article }) { return <article className="article"><p className="eyebrow">Documented source</p><h1>{article.source_path || 'Source location unavailable'}</h1><p>{article.source_range ? `Lines ${article.source_range}` : 'Source range unavailable'} · The CLI keeps exact quote content in each revision.</p><pre>{article.body.match(/## Documented code[\s\S]*/)?.[0] || 'No quoted source block was recorded.'}</pre></article> }
 
 createRoot(document.getElementById('root')!).render(<App />)

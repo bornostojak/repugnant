@@ -55,6 +55,21 @@ func TestGenerateTracksQuoteAndAppendsExplicitRevision(t *testing.T) {
 	}
 }
 
+func TestGenerateHonorsConfiguredLanguages(t *testing.T) {
+	root := t.TempDir()
+	writeTestConfig(t, root)
+	config, _ := os.ReadFile(filepath.Join(root, "rpg.conf.yaml"))
+	if err := os.WriteFile(filepath.Join(root, "rpg.conf.yaml"), []byte(strings.Replace(string(config), "langs: [go]", "langs: [ruby]", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("// $rPg: ignored\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := Generate(root); err != nil || n != 0 {
+		t.Fatalf("Generate = %d, %v", n, err)
+	}
+}
+
 func writeTestConfig(t *testing.T, root string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Join(root, ".rpg"), 0o755); err != nil {

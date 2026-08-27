@@ -173,19 +173,20 @@ func (s *Server) createArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		ID         string   `json:"id"`
-		Title      string   `json:"title"`
-		Body       string   `json:"body"`
-		Category   string   `json:"category"`
-		SourcePath string   `json:"source_path"`
-		Tags       []string `json:"tags"`
+		ID          string   `json:"id"`
+		Title       string   `json:"title"`
+		Body        string   `json:"body"`
+		Category    string   `json:"category"`
+		SourcePath  string   `json:"source_path"`
+		SourceRange string   `json:"source_range"`
+		Tags        []string `json:"tags"`
 	}
 	if json.NewDecoder(r.Body).Decode(&in) != nil || in.Title == "" {
 		http.Error(w, "title is required", 400)
 		return
 	}
 	tags, _ := json.Marshal(in.Tags)
-	a, e := s.store.AddArticle(store.Article{ID: in.ID, ProjectSlug: slug, Title: in.Title, Body: in.Body, Category: in.Category, Tags: string(tags), SourcePath: in.SourcePath})
+	a, e := s.store.AddArticle(store.Article{ID: in.ID, ProjectSlug: slug, Title: in.Title, Body: in.Body, Category: in.Category, Tags: string(tags), SourcePath: in.SourcePath, SourceRange: in.SourceRange})
 	if e != nil {
 		http.Error(w, "article could not be created", 409)
 		return
