@@ -5,6 +5,7 @@ services:
       - "8080:8080"
     environment:
       RPG_HTTP_ADDR: ${RPG_HTTP_ADDR:-0.0.0.0:8080}
+      RPG_LOG_LEVEL: ${RPG_LOG_LEVEL:-info}
       RPG_WEB_DIR: /app/web
       RPG_DB_DRIVER: ${RPG_DB_DRIVER:-sqlite}
       RPG_DB_DSN: ${RPG_DB_DSN:-file:/app/data/rpg.db?_pragma=busy_timeout(5000)}
