@@ -28,7 +28,7 @@ func run(args []string, stdout, _ io.Writer) error {
 		return generate(stdout)
 	}
 	if len(args) > 0 && args[0] == "push" {
-		return fmt.Errorf("rpg push is not available until web publishing is configured")
+		return push(stdout)
 	}
 	if len(args) > 0 && args[0] == "hook" {
 		return runHook(args[1:], stdout)
@@ -49,6 +49,18 @@ func run(args []string, stdout, _ io.Writer) error {
 	}
 	_, err := fmt.Fprintln(stdout, "rpg: documentation that stays close to code")
 	return err
+}
+func push(stdout io.Writer) error {
+	root, e := os.Getwd()
+	if e != nil {
+		return e
+	}
+	n, e := docs.Push(root)
+	if e != nil {
+		return e
+	}
+	_, e = fmt.Fprintf(stdout, "published %d documentation article(s)\n", n)
+	return e
 }
 func generate(stdout io.Writer) error {
 	root, e := os.Getwd()
