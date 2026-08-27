@@ -1,0 +1,12 @@
+services:
+  rpg:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      RPG_HTTP_ADDR: ":8080"
+    volumes:
+      - rpg-data:/app/data
+
+volumes:
+  rpg-data:
