@@ -33,7 +33,8 @@ const preCommitHook = `#!/bin/sh
 if [ -x "$0.rpg-backup" ]; then
   "$0.rpg-backup" "$@" || exit $?
 fi
-exec rpg hook pre-commit
+rpg hook pre-commit || exit $?
+git add docs
 `
 
 const prePushHook = `#!/bin/sh

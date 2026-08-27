@@ -12,6 +12,9 @@ var extensions = map[string]string{
 
 func Parse(path, source string) ([]Finding, error) {
 	prefix, ok := extensions[filepath.Ext(path)]
+	if filepath.Base(path) == "Jenkinsfile" {
+		prefix, ok = "//", true
+	}
 	if !ok {
 		return nil, nil
 	}

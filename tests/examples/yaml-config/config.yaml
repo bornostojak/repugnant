@@ -1,0 +1,4 @@
+# $rPg: YAML cache configuration, yaml, config
+# $~ Defines the local development cache policy.
+cache:
+  ttl_seconds: 60
