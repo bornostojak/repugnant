@@ -104,8 +104,15 @@ func (s *Store) Migrate() error {
 	if s.postgres {
 		schema = `CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, name TEXT NOT NULL, api_key TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL); CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, short_id TEXT NOT NULL UNIQUE, project_slug TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, category TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', source_path TEXT NOT NULL DEFAULT '', source_range TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL); CREATE TABLE IF NOT EXISTS article_revisions (article_id TEXT NOT NULL, revision INTEGER NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL, PRIMARY KEY(article_id,revision));`
 	}
-	_, e := s.db.Exec(schema)
-	return e
+	if _, e := s.db.Exec(schema); e != nil {
+		return e
+	}
+	// CREATE TABLE does not upgrade databases created by an earlier rpg build.
+	// These additive fields have defaults, so each is safe for existing rows.
+	for _, column := range []string{"category TEXT NOT NULL DEFAULT ''", "tags TEXT NOT NULL DEFAULT ''", "source_path TEXT NOT NULL DEFAULT ''", "source_range TEXT NOT NULL DEFAULT ''"} {
+		_, _ = s.db.Exec(`ALTER TABLE articles ADD COLUMN ` + column)
+	}
+	return nil
 }
 func token(n int) (string, error) {
 	b := make([]byte, n)
