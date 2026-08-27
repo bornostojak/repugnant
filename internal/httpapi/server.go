@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/bornostojak/repugnant/internal/store"
@@ -28,11 +29,43 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.health)
 	if s.store != nil {
 		mux.HandleFunc("POST /api/projects", s.createProject)
+		mux.HandleFunc("GET /api/projects", s.listProjects)
+		mux.HandleFunc("GET /api/projects/{slug}/articles", s.listArticles)
 		mux.HandleFunc("POST /api/projects/{slug}/articles", s.createArticle)
 		mux.HandleFunc("GET /p/{slug}/article/{id}/{revision}", s.articlePage)
 		mux.HandleFunc("GET /{shortID}", s.shortLink)
 	}
 	return s.logRequests(mux)
+}
+func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
+	p, e := s.store.ListProjects()
+	if e != nil {
+		http.Error(w, "list projects failed", 500)
+		return
+	}
+	writeJSON(w, 200, p)
+}
+func (s *Server) listArticles(w http.ResponseWriter, r *http.Request) {
+	a, e := s.store.ListArticles(r.PathValue("slug"), r.URL.Query().Get("q"))
+	if e != nil {
+		http.Error(w, "list articles failed", 500)
+		return
+	}
+	writeJSON(w, 200, a)
+}
+func WithWeb(api http.Handler, dir string) http.Handler {
+	files := http.FileServer(http.Dir(dir))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.ServeFile(w, r, dir+"/index.html")
+			return
+		}
+		if _, e := os.Stat(dir + r.URL.Path); e == nil {
+			files.ServeHTTP(w, r)
+			return
+		}
+		api.ServeHTTP(w, r)
+	})
 }
 
 var articleTemplate = template.Must(template.New("article").Parse(`<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{.Title}} · rePugnant</title><style>body{max-width:48rem;margin:3rem auto;padding:0 1rem;font:16px system-ui;color:#1d2835}header{border-bottom:1px solid #d8e0e8}pre{background:#f4f7f8;padding:1rem;overflow:auto}small{color:#52606d}</style></head><body><header><small>{{.ProjectSlug}} · revision {{.Revision}}</small><h1>{{.Title}}</h1><small>Short link: /{{.ShortID}}</small></header><main><pre>{{.Body}}</pre></main></body></html>`))

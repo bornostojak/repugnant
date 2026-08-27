@@ -12,4 +12,5 @@ body { margin: 0; }
 .eyebrow { color: #0f766e; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; font-size: .8rem; }
 h1 { max-width: 28rem; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; margin: .5rem 0 1rem; }
 .lede { max-width: 42rem; color: #52606d; line-height: 1.6; }
+.workspace{display:grid;grid-template-columns:14rem 1fr;gap:2rem;margin-top:3rem}.workspace aside{border-right:1px solid #d8e0e8}.workspace button{display:block;background:none;border:0;padding:.5rem;text-align:left;width:100%;cursor:pointer}.workspace button.active{color:#0f766e;font-weight:700}.workspace input{width:100%;padding:.7rem;border:1px solid #b9c4cf;border-radius:.35rem}.workspace article{border-bottom:1px solid #d8e0e8;padding:1rem 0}.workspace h3{margin:.2rem 0}.workspace a{color:#0f766e}@media(max-width:40rem){.workspace{grid-template-columns:1fr}.workspace aside{border-right:0;border-bottom:1px solid #d8e0e8;padding-bottom:1rem}}
 @media (max-width: 40rem) { .app-shell { padding-top: 2.5rem; } }

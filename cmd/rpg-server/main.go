@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/bornostojak/repugnant/internal/httpapi"
 )
@@ -25,7 +26,11 @@ func main() {
 	}
 	defer database.Close()
 	logger.Info("starting rpg server", "address", address)
-	if err := http.ListenAndServe(address, httpapi.NewWithStore(logger, database).Handler()); err != nil {
+	handler := httpapi.NewWithStore(logger, database).Handler()
+	if webDir := os.Getenv("RPG_WEB_DIR"); webDir != "" {
+		handler = httpapi.WithWeb(handler, filepath.Clean(webDir))
+	}
+	if err := http.ListenAndServe(address, handler); err != nil {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
 	}

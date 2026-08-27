@@ -22,6 +22,46 @@ type Article struct {
 	CreatedAt                             time.Time
 }
 
+func (s *Store) ListProjects() ([]Project, error) {
+	rows, e := s.db.Query(`SELECT slug,name FROM projects ORDER BY name`)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	var out []Project
+	for rows.Next() {
+		var p Project
+		if e = rows.Scan(&p.Slug, &p.Name); e != nil {
+			return nil, e
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+func (s *Store) ListArticles(slug, query string) ([]Article, error) {
+	q := `SELECT id,short_id,project_slug,title,body,revision,created_at FROM articles WHERE project_slug=?`
+	args := []any{slug}
+	if query != "" {
+		q += ` AND (title LIKE ? OR body LIKE ?)`
+		args = append(args, "%"+query+"%", "%"+query+"%")
+	}
+	q += ` ORDER BY created_at DESC`
+	rows, e := s.db.Query(s.q(q), args...)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	var out []Article
+	for rows.Next() {
+		var a Article
+		if e = rows.Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Revision, &a.CreatedAt); e != nil {
+			return nil, e
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 func Open(driver, dsn string) (*Store, error) {
 	if driver == "" {
 		driver = "sqlite"
