@@ -29,7 +29,7 @@ func (s *Store) ListProjects() ([]Project, error) {
 		return nil, e
 	}
 	defer rows.Close()
-	var out []Project
+	out := make([]Project, 0)
 	for rows.Next() {
 		var p Project
 		if e = rows.Scan(&p.Slug, &p.Name); e != nil {
@@ -52,7 +52,7 @@ func (s *Store) ListArticles(slug, query string) ([]Article, error) {
 		return nil, e
 	}
 	defer rows.Close()
-	var out []Article
+	out := make([]Article, 0)
 	for rows.Next() {
 		var a Article
 		if e = rows.Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Category, &a.Tags, &a.SourcePath, &a.SourceRange, &a.Revision, &a.CreatedAt); e != nil {
