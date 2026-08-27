@@ -1,0 +1,81 @@
+package project
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v3"
+)
+
+const ConfigFileName = "rpg.conf.yaml"
+
+// Config controls generation and publishing for one documented repository.
+type Config struct {
+	Version int          `yaml:"version"`
+	Langs   []string     `yaml:"langs,omitempty"`
+	Output  OutputConfig `yaml:"output"`
+	Hooks   HookConfig   `yaml:"hooks"`
+}
+
+type OutputConfig struct {
+	Docs DocsOutputConfig `yaml:"docs"`
+	Web  WebOutputConfig  `yaml:"web"`
+}
+
+type DocsOutputConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Dir     string `yaml:"dir"`
+}
+
+type WebOutputConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Endpoint string `yaml:"endpoint,omitempty"`
+}
+
+type HookConfig struct {
+	OnPublishFailure string `yaml:"on_publish_failure"`
+}
+
+func DefaultConfig() Config {
+	return Config{
+		Version: 1,
+		Output: OutputConfig{
+			Docs: DocsOutputConfig{Enabled: true, Dir: "docs"},
+			Web:  WebOutputConfig{Enabled: false},
+		},
+		Hooks: HookConfig{OnPublishFailure: "block"},
+	}
+}
+
+func Load(root string) (Config, error) {
+	path := filepath.Join(root, ConfigFileName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, fmt.Errorf("read %s: %w", ConfigFileName, err)
+	}
+	var config Config
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return Config{}, fmt.Errorf("parse %s: %w", ConfigFileName, err)
+	}
+	if err := config.Validate(); err != nil {
+		return Config{}, err
+	}
+	return config, nil
+}
+
+func (c Config) Validate() error {
+	if c.Version != 1 {
+		return fmt.Errorf("rpg.conf.yaml: unsupported version %d", c.Version)
+	}
+	if c.Output.Docs.Enabled && c.Output.Docs.Dir == "" {
+		return fmt.Errorf("rpg.conf.yaml: output.docs.dir is required when local docs are enabled")
+	}
+	if c.Output.Web.Enabled && c.Output.Web.Endpoint == "" {
+		return fmt.Errorf("rpg.conf.yaml: output.web.endpoint is required when web output is enabled")
+	}
+	if c.Hooks.OnPublishFailure != "block" && c.Hooks.OnPublishFailure != "allow_pending" {
+		return fmt.Errorf("rpg.conf.yaml: hooks.on_publish_failure must be block or allow_pending")
+	}
+	return nil
+}

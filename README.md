@@ -14,4 +14,6 @@ npm --prefix web ci
 npm --prefix web run build
 ```
 
+From the root of a Git worktree, run `go run ./cmd/rpg init` to create the commented `rpg.conf.yaml`, ignored `.rpg/` staging directory, and Git hooks. `go run ./cmd/rpg --init-hooks` installs or repairs only the hooks and preserves pre-existing hooks as executable `.rpg-backup` files.
+
 `Dockerfile` and `compose.yaml` provide the container deployment foundation. Product behavior, style, infrastructure, test expectations, and deferred work are defined in [`rules_of_engagement/`](rules_of_engagement/).
