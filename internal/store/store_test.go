@@ -27,4 +27,8 @@ func TestSQLiteProjectAndArticle(t *testing.T) {
 	if err != nil || article.Title != "A" {
 		t.Fatalf("article lookup: %+v %v", article, err)
 	}
+	updated, err := s.AddArticle(Article{ID: a.ID, ProjectSlug: p.Slug, Title: "A revised", Body: "next"})
+	if err != nil || updated.Revision != 2 {
+		t.Fatalf("revision = %+v, err=%v", updated, err)
+	}
 }

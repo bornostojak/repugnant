@@ -31,11 +31,20 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /api/projects", s.createProject)
 		mux.HandleFunc("GET /api/projects", s.listProjects)
 		mux.HandleFunc("GET /api/projects/{slug}/articles", s.listArticles)
+		mux.HandleFunc("GET /api/projects/{slug}/articles/{id}/revisions", s.listRevisions)
 		mux.HandleFunc("POST /api/projects/{slug}/articles", s.createArticle)
 		mux.HandleFunc("GET /p/{slug}/article/{id}/{revision}", s.articlePage)
 		mux.HandleFunc("GET /{shortID}", s.shortLink)
 	}
 	return s.logRequests(mux)
+}
+func (s *Server) listRevisions(w http.ResponseWriter, r *http.Request) {
+	a, e := s.store.Revisions(r.PathValue("slug"), r.PathValue("id"))
+	if e != nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, 200, a)
 }
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 	p, e := s.store.ListProjects()

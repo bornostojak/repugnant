@@ -99,9 +99,9 @@ func (s *Store) q(query string) string {
 	return b.String()
 }
 func (s *Store) Migrate() error {
-	schema := `CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, name TEXT NOT NULL, api_key TEXT NOT NULL UNIQUE, created_at TIMESTAMP NOT NULL); CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, short_id TEXT NOT NULL UNIQUE, project_slug TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, revision INTEGER NOT NULL, created_at TIMESTAMP NOT NULL);`
+	schema := `CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, name TEXT NOT NULL, api_key TEXT NOT NULL UNIQUE, created_at TIMESTAMP NOT NULL); CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, short_id TEXT NOT NULL UNIQUE, project_slug TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, revision INTEGER NOT NULL, created_at TIMESTAMP NOT NULL); CREATE TABLE IF NOT EXISTS article_revisions (article_id TEXT NOT NULL, revision INTEGER NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMP NOT NULL, PRIMARY KEY(article_id,revision));`
 	if s.postgres {
-		schema = `CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, name TEXT NOT NULL, api_key TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL); CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, short_id TEXT NOT NULL UNIQUE, project_slug TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, revision INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL);`
+		schema = `CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, name TEXT NOT NULL, api_key TEXT NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL); CREATE TABLE IF NOT EXISTS articles (id TEXT PRIMARY KEY, short_id TEXT NOT NULL UNIQUE, project_slug TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, revision INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL); CREATE TABLE IF NOT EXISTS article_revisions (article_id TEXT NOT NULL, revision INTEGER NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL, PRIMARY KEY(article_id,revision));`
 	}
 	_, e := s.db.Exec(schema)
 	return e
@@ -133,9 +133,26 @@ func (s *Store) AddArticle(a Article) (Article, error) {
 	if a.ShortID == "" {
 		a.ShortID, _ = token(9)
 	}
+	var current int
+	err := s.db.QueryRow(s.q(`SELECT revision FROM articles WHERE id=? AND project_slug=?`), a.ID, a.ProjectSlug).Scan(&current)
+	if err == nil {
+		a.Revision = current + 1
+		a.CreatedAt = time.Now().UTC()
+		_, err = s.db.Exec(s.q(`UPDATE articles SET title=?,body=?,revision=?,created_at=? WHERE id=? AND project_slug=?`), a.Title, a.Body, a.Revision, a.CreatedAt, a.ID, a.ProjectSlug)
+		if err == nil {
+			_, err = s.db.Exec(s.q(`INSERT INTO article_revisions(article_id,revision,title,body,created_at) VALUES(?,?,?,?,?)`), a.ID, a.Revision, a.Title, a.Body, a.CreatedAt)
+		}
+		return a, err
+	}
+	if err != sql.ErrNoRows {
+		return a, err
+	}
 	a.Revision = 1
 	a.CreatedAt = time.Now().UTC()
 	_, e := s.db.Exec(s.q(`INSERT INTO articles(id,short_id,project_slug,title,body,revision,created_at) VALUES(?,?,?,?,?,?,?)`), a.ID, a.ShortID, a.ProjectSlug, a.Title, a.Body, a.Revision, a.CreatedAt)
+	if e == nil {
+		_, e = s.db.Exec(s.q(`INSERT INTO article_revisions(article_id,revision,title,body,created_at) VALUES(?,?,?,?,?)`), a.ID, a.Revision, a.Title, a.Body, a.CreatedAt)
+	}
 	return a, e
 }
 func (s *Store) FindShort(short string) (Article, error) {
@@ -147,6 +164,26 @@ func (s *Store) FindArticle(projectSlug, id string) (Article, error) {
 	var a Article
 	e := s.db.QueryRow(s.q(`SELECT id,short_id,project_slug,title,body,revision,created_at FROM articles WHERE project_slug=? AND id=?`), projectSlug, id).Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Revision, &a.CreatedAt)
 	return a, e
+}
+func (s *Store) Revisions(projectSlug, id string) ([]Article, error) {
+	a, e := s.FindArticle(projectSlug, id)
+	if e != nil {
+		return nil, e
+	}
+	rows, e := s.db.Query(s.q(`SELECT revision,title,body,created_at FROM article_revisions WHERE article_id=? ORDER BY revision DESC`), id)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	var out []Article
+	for rows.Next() {
+		r := a
+		if e = rows.Scan(&r.Revision, &r.Title, &r.Body, &r.CreatedAt); e != nil {
+			return nil, e
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 func Slug(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
