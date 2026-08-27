@@ -10,15 +10,16 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
     "@tailwindcss/vite": "latest",
-    "vite": "latest",
+    "@vitejs/plugin-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "tailwindcss": "latest"
+    "tailwindcss": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
     "@eslint/js": "latest",
+    "@playwright/test": "^1.58.2",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "eslint": "latest",
