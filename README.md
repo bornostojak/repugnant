@@ -1,5 +1,7 @@
 # rePugnant
 
+> **Status: beta.** rePugnant is under active development. Core CLI, backend, and web UI paths work end-to-end and are covered by tests, but interfaces, config format, and stored data may still change without a migration path. Not yet recommended for production use. See [`PROGRESS.md`](PROGRESS.md) and [`ROADMAP.md`](ROADMAP.md) for exact current state.
+
 **rePugnant** (`rpg`) turns comments you were already going to write into stable, revisioned, searchable documentation — without ever leaving your editor.
 
 Programmers like writing code. They tolerate writing comments. They actively avoid opening Confluence, Notion, or any tool that isn't a terminal in the middle of a flow state. `rpg` bets that if writing docs feels exactly like writing a comment, people will actually write good docs — and keep them up to date, because the tool notices when the code they describe has changed.
@@ -313,7 +315,7 @@ Ten versioned language fixtures under [`tests/examples/`](tests/examples/) drive
 
 ## Project status
 
-Actively developed, **not yet released**. Backend, CLI, and web UI are all functional against the current spec; remaining gaps (source-file browser UI, keyboard-navigation coverage, full end-to-end smoke suite) are tracked with checkboxes in [`ROADMAP.md`](ROADMAP.md), and current verified state is in [`PROGRESS.md`](PROGRESS.md).
+**Beta — actively developed, not yet released.** Backend, CLI, and web UI are all functional against the current spec; remaining gaps (source-file browser UI, keyboard-navigation coverage, full end-to-end smoke suite) are tracked with checkboxes in [`ROADMAP.md`](ROADMAP.md), and current verified state is in [`PROGRESS.md`](PROGRESS.md).
 
 ## Documentation map
 
