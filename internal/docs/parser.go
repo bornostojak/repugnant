@@ -10,6 +10,17 @@ var extensions = map[string]string{
 	".go": "//", ".ts": "//", ".tsx": "//", ".js": "//", ".jsx": "//", ".svelte": "//", ".rs": "//", ".c": "//", ".h": "//", ".cc": "//", ".cpp": "//", ".dart": "//", ".groovy": "//", ".qml": "//", ".py": "#", ".rb": "#", ".sh": "#", ".bash": "#", ".yaml": "#", ".yml": "#",
 }
 
+var languageExtensions = map[string]string{
+	".go": "go", ".ts": "typescript", ".tsx": "typescript", ".js": "javascript", ".jsx": "javascript", ".svelte": "svelte", ".rs": "rust", ".c": "cpp", ".h": "cpp", ".cc": "cpp", ".cpp": "cpp", ".dart": "dart", ".groovy": "groovy", ".qml": "qml", ".py": "python", ".rb": "ruby", ".sh": "bash", ".bash": "bash", ".yaml": "yaml", ".yml": "yaml",
+}
+
+func Language(path string) string {
+	if filepath.Base(path) == "Jenkinsfile" {
+		return "groovy"
+	}
+	return languageExtensions[filepath.Ext(path)]
+}
+
 func Parse(path, source string) ([]Finding, error) {
 	prefix, ok := extensions[filepath.Ext(path)]
 	if filepath.Base(path) == "Jenkinsfile" {

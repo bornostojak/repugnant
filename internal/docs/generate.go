@@ -22,9 +22,9 @@ type manifest struct {
 	Articles map[string]manifestArticle `json:"articles"`
 }
 type manifestArticle struct {
-	Path, QuoteHash, Title, Category string
-	Tags                             []string
-	Revision                         int
+	Path, SourceRange, QuoteHash, Title, Category string
+	Tags                                          []string
+	Revision                                      int
 }
 
 // Generate only creates docs for new markers, appends explicit revisions, and
@@ -47,6 +47,7 @@ func Generate(root string) (int, error) {
 		return 0, err
 	}
 	name, email := gitIdentity(root)
+	enabled := c.EnabledLanguages(root)
 	changed := 0
 	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -56,6 +57,9 @@ func Generate(root string) (int, error) {
 			if path != root && (path == out || entry.Name() == ".git" || entry.Name() == ".rpg" || entry.Name() == "node_modules") {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if len(enabled) > 0 && !enabled[Language(path)] {
 			return nil
 		}
 		data, err := os.ReadFile(path)
@@ -80,7 +84,7 @@ func Generate(root string) (int, error) {
 				if err := os.WriteFile(filepath.Join(out, id+".md"), []byte(Render(a, name, email, time.Now().UTC(), webArticleURL(c, id))), 0o644); err != nil {
 					return err
 				}
-				m.Articles[id] = manifestArticle{Path: rel, QuoteHash: quoteHash(f.Quote), Title: f.Title, Category: f.Category, Tags: f.Tags, Revision: 1}
+				m.Articles[id] = manifestArticle{Path: rel, SourceRange: sourceRange(f), QuoteHash: quoteHash(f.Quote), Title: f.Title, Category: f.Category, Tags: f.Tags, Revision: 1}
 				lines[f.Start] = replaceMarker(lines[f.Start], id)
 				fileChanged, changed = true, changed+1
 			case "tracked":
@@ -106,6 +110,7 @@ func Generate(root string) (int, error) {
 				if f.Quote != "" {
 					record.QuoteHash = quoteHash(f.Quote)
 				}
+				record.SourceRange = sourceRange(f)
 				m.Articles[f.ID] = record
 				lines[f.Start] = replaceMarker(lines[f.Start], f.ID)
 				fileChanged, changed = true, changed+1
@@ -124,6 +129,7 @@ func Generate(root string) (int, error) {
 	}
 	return changed, err
 }
+func sourceRange(f Finding) string { return fmt.Sprintf("%d-%d", f.Start+1, f.End+1) }
 
 func loadManifest(root string) (manifest, error) {
 	m := manifest{Articles: map[string]manifestArticle{}}

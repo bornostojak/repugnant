@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -17,6 +18,40 @@ type Config struct {
 	Output  OutputConfig  `yaml:"output"`
 	Hooks   HookConfig    `yaml:"hooks"`
 	Project ProjectConfig `yaml:"project"`
+}
+
+// EnabledLanguages honors an explicit config list. Otherwise it infers likely
+// languages from conventional project-root manifests; a repository with no
+// recognizable manifest remains permissive so small scripts still work.
+func (c Config) EnabledLanguages(root string) map[string]bool {
+	if len(c.Langs) > 0 {
+		return languageSet(c.Langs)
+	}
+	hints := map[string][]string{
+		"go": {"go.mod", "go.sum"}, "typescript": {"tsconfig.json"}, "javascript": {"package.json"},
+		"rust": {"Cargo.toml"}, "python": {"pyproject.toml", "requirements.txt"}, "ruby": {"Gemfile"},
+		"dart": {"pubspec.yaml"}, "cpp": {"CMakeLists.txt"},
+	}
+	result := map[string]bool{}
+	for language, files := range hints {
+		for _, file := range files {
+			if _, err := os.Stat(filepath.Join(root, file)); err == nil {
+				result[language] = true
+				break
+			}
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+func languageSet(langs []string) map[string]bool {
+	out := map[string]bool{}
+	for _, language := range langs {
+		out[strings.ToLower(strings.TrimSpace(language))] = true
+	}
+	return out
 }
 
 type OutputConfig struct {

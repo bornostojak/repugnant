@@ -43,7 +43,7 @@ func Push(root string) (int, error) {
 		}
 		id := strings.TrimSuffix(filepath.Base(f), ".md")
 		record := manifest.Articles[id]
-		p, _ := json.Marshal(map[string]any{"id": id, "title": title, "body": string(b), "category": record.Category, "tags": record.Tags, "source_path": record.Path})
+		p, _ := json.Marshal(map[string]any{"id": id, "title": title, "body": string(b), "category": record.Category, "tags": record.Tags, "source_path": record.Path, "source_range": record.SourceRange})
 		r, e := http.NewRequest(http.MethodPost, c.Project.APIURL, bytes.NewReader(p))
 		if e != nil {
 			return n, e
