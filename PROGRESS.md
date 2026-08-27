@@ -4,18 +4,18 @@ Status: **In progress — not ready for review or release.**
 
 | Area | Status | Evidence / outstanding work |
 |---|---|---|
-| CLI initialization | Partial | `rpg init` and hook installation work; hooks need complete staging/publishing behavior. |
-| Local documentation | Partial | Initial examples generate Markdown; revision, drift detection, metadata identity, and correct staging are incomplete. |
-| Backend | Partial | Project/API-key/article/short-link prototype exists; wiki data model and APIs are incomplete. |
-| Frontend | Not started as product UI | A placeholder React shell exists but is not served or navigable. |
-| Deployment | Partial | Go server can listen on all interfaces; Compose runtime unavailable here and static frontend serving is not connected. |
-| Examples | Partial | Ten source fixtures exist and temporary commits were manually verified; no committed automated integration harness yet. |
-| Manual server push | Not implemented | `rpg push` deliberately reports unavailable; it must be implemented before this status can advance. |
+| CLI initialization | Complete | `rpg init` is idempotent, installs chained hooks, generates/stages configured local docs, and uses a blocking pre-push default. |
+| Local documentation | Partial | Category/tag metadata, Git identity, stable IDs, quote-drift diagnostics, and append-only revisions work. Source ranges and language auto-detection still need implementation. |
+| Backend | Partial | Project/API-key/article/revision/short-link/search/organization APIs work; source ranges, author fields, and PostgreSQL runtime verification remain. |
+| Frontend | Partial | Built React wiki is served by the backend with project creation, tree/search, reader/source modes, history, and organization controls. Chromium interaction verification remains. |
+| Deployment | Partial | Container defaults now serve the web app and persist SQLite; Compose is unavailable in this host environment and PostgreSQL has not been runtime-verified. |
+| Examples | Partial | Ten fixtures are checked in and an automated temporary-Git integration test validates init, commit hook, generation, manual push, and server persistence. |
+| Manual server push | Complete | `rpg push` publishes docs metadata and is idempotent against unchanged server content. |
 
 ## Latest verified work
 
-- Go package tests passed after adding parser/generator foundation and SQLite API tests.
-- Ten copied fixtures were initialized as temporary Git repositories and each produced one local Markdown file through its pre-commit hook.
-- Live backend smoke-tested project creation, API-key article publishing, rendered article route, and short-link redirect.
+- `go test ./cmd/... ./internal/...` and `npm --prefix web run build` pass.
+- `go test ./internal/integration -v` exercises all ten fixture repositories using real `rpg init`, pre-commit hook, generated docs, `rpg push`, and an HTTP server.
+- A live server on port 18082 served the built homepage and successfully created, published, searched, and organized a test article.
 
 These checks do **not** constitute full delivery. See `ROADMAP.md` for remaining required work.

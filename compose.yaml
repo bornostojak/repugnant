@@ -4,9 +4,22 @@ services:
     ports:
       - "8080:8080"
     environment:
-      RPG_HTTP_ADDR: ":8080"
+      RPG_HTTP_ADDR: ${RPG_HTTP_ADDR:-0.0.0.0:8080}
+      RPG_WEB_DIR: /app/web
+      RPG_DB_DRIVER: ${RPG_DB_DRIVER:-sqlite}
+      RPG_DB_DSN: ${RPG_DB_DSN:-file:/app/data/rpg.db?_pragma=busy_timeout(5000)}
     volumes:
       - rpg-data:/app/data
+  postgres:
+    image: postgres:17-alpine
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rpg}
+      POSTGRES_USER: ${POSTGRES_USER:-rpg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
 
 volumes:
   rpg-data:
+  postgres-data:

@@ -34,6 +34,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /api/projects", s.listProjects)
 		mux.HandleFunc("GET /api/projects/{slug}/articles", s.listArticles)
 		mux.HandleFunc("GET /api/projects/{slug}/articles/{id}", s.getArticle)
+		mux.HandleFunc("PATCH /api/projects/{slug}/articles/{id}", s.updateOrganization)
 		mux.HandleFunc("GET /api/projects/{slug}/articles/{id}/revisions", s.listRevisions)
 		mux.HandleFunc("POST /api/projects/{slug}/articles", s.createArticle)
 		mux.HandleFunc("GET /p/{slug}/article/{id}/{revision}", s.articlePage)
@@ -57,6 +58,22 @@ func (s *Server) getArticle(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, a)
 }
+func (s *Server) updateOrganization(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Category string   `json:"category"`
+		Tags     []string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		http.Error(w, "expected category and tags JSON", http.StatusBadRequest)
+		return
+	}
+	a, err := s.store.UpdateOrganization(r.PathValue("slug"), r.PathValue("id"), strings.TrimSpace(in.Category), in.Tags)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, a)
+}
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 	p, e := s.store.ListProjects()
 	if e != nil {
@@ -76,6 +93,10 @@ func (s *Server) listArticles(w http.ResponseWriter, r *http.Request) {
 func WithWeb(api http.Handler, dir string) http.Handler {
 	files := http.FileServer(http.Dir(dir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/p/") {
+			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
+			return
+		}
 		if r.URL.Path == "/" {
 			http.ServeFile(w, r, dir+"/index.html")
 			return
@@ -152,8 +173,12 @@ func (s *Server) createArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		ID, Title, Body, Category, SourcePath string
-		Tags                                  []string `json:"tags"`
+		ID         string   `json:"id"`
+		Title      string   `json:"title"`
+		Body       string   `json:"body"`
+		Category   string   `json:"category"`
+		SourcePath string   `json:"source_path"`
+		Tags       []string `json:"tags"`
 	}
 	if json.NewDecoder(r.Body).Decode(&in) != nil || in.Title == "" {
 		http.Error(w, "title is required", 400)

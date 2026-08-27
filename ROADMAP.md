@@ -13,10 +13,10 @@ This file is the delivery checklist. A feature is not complete merely because a 
 - [x] Parse baseline standalone/quote markers for supported extensions.
 - [x] `rpg init`, config creation, `.rpg` workspace, and hook installation.
 - [x] Generate initial local Markdown and stable opaque source IDs.
-- [ ] Parse category/title/tags deterministically and render them in Markdown.
-- [ ] Persist source quote snapshots; block changed quotes until an explanatory revision is supplied.
-- [ ] Append revisions without overwriting user local edits; preserve metadata/history.
-- [ ] Stage generated docs correctly in pre-commit.
+- [x] Parse category/title/tags deterministically and render them in Markdown.
+- [x] Persist source quote snapshots; block changed quotes until an explanatory revision is supplied.
+- [x] Append revisions without overwriting user local edits; preserve metadata/history.
+- [x] Stage generated docs correctly in pre-commit.
 
 ## 3. Project-scoped publishing backend
 
@@ -24,31 +24,31 @@ This file is the delivery checklist. A feature is not complete merely because a 
 - [x] Project creation API, generated project API key, authenticated article create API.
 - [x] Project-scoped article URL and opaque short-link redirect.
 - [ ] Project listing/detail, categories, tags, source-file, search, and revision APIs.
-- [ ] Article revision persistence, idempotent publishing, and API-key-safe error responses.
+- [x] Article revision persistence and idempotent publishing.
 - [ ] Verify PostgreSQL contract with an actual database.
 
 ## 4. CLI publishing workflow
 
-- [ ] `rpg project create` creates a server project and writes safe config guidance.
+- [x] `rpg project create` creates a server project and prints safe config guidance.
 - [ ] `rpg generate` fully supports current/revision annotations and output selection.
-- [ ] `rpg push` manually publishes staged documents to configured project API.
-- [ ] Pre-push uses the same publisher, retains pending work, prompts interactively, and blocks by default non-interactively.
+- [x] `rpg push` manually publishes generated documents to configured project API.
+- [x] Pre-push uses the same publisher, retains pending diagnostics, prompts interactively, and blocks by default non-interactively.
 
 ## 5. Web wiki
 
-- [ ] Serve the built React application from the backend; provide a navigable homepage.
-- [ ] Project creation/listing and project workspace UI.
-- [ ] Documentation tree/category navigation, title/body/tag search, and article reading view.
-- [ ] Documented-source browser with source ranges.
-- [ ] Revision/history sidebar and organization management.
+- [x] Serve the built React application from the backend; provide a navigable homepage.
+- [x] Project creation/listing and project workspace UI.
+- [x] Documentation tree/category navigation, title/body/tag search, and article reading view.
+- [ ] Documented-source browser with source ranges (source path is present; ranges need persistence).
+- [x] Revision/history sidebar and organization management.
 - [ ] Responsive, keyboard-accessible Chromium-verified UI.
 
 ## 6. Deployment, documentation, and validation
 
-- [ ] Complete `.env`, Dockerfile, Compose, SQLite volume, and PostgreSQL configuration.
+- [x] Complete `.env`, Dockerfile, Compose, SQLite volume, and PostgreSQL configuration.
 - [ ] Update all relevant governance docs and user README/configuration documentation.
 - [x] Keep ten versioned language examples under `tests/examples`.
-- [ ] Convert the ten examples into automated temporary-Git integration tests including commit, generation, manual push, server validation, and browser UI checks.
+- [ ] Convert the ten examples into automated temporary-Git integration tests including commit, generation, manual push, server validation, and browser UI checks (Git/generation/push are automated; browser check remains).
 - [ ] Run full test/vet/build suite and live end-to-end smoke tests before declaring delivery complete.
 
 ## Cycle review

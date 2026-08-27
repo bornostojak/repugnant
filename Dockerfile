@@ -20,5 +20,8 @@ COPY --from=server-build /out/rpg-server ./rpg-server
 COPY --from=web-build /src/web/dist ./web
 USER rpg
 EXPOSE 8080
-ENV RPG_HTTP_ADDR=:8080
+ENV RPG_HTTP_ADDR=0.0.0.0:8080
+ENV RPG_WEB_DIR=/app/web
+ENV RPG_DB_DRIVER=sqlite
+ENV RPG_DB_DSN=file:/app/data/rpg.db?_pragma=busy_timeout(5000)
 ENTRYPOINT ["./rpg-server"]
