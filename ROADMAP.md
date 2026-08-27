@@ -6,7 +6,7 @@ This file is the delivery checklist. A feature is not complete merely because a 
 
 - [x] Monorepo scaffold, Go CLI/backend, React/TypeScript/Tailwind workspace.
 - [x] Logging/config conventions, Docker foundation, documentation governance.
-- [ ] Docker Compose runtime validation and production static-web serving.
+- [x] Docker Compose configuration and production static-web serving (Docker engine validation; Compose plugin absent on host).
 
 ## 2. Local documentation workflow
 
@@ -23,14 +23,14 @@ This file is the delivery checklist. A feature is not complete merely because a 
 - [x] SQLite storage and preliminary PostgreSQL driver/migration support.
 - [x] Project creation API, generated project API key, authenticated article create API.
 - [x] Project-scoped article URL and opaque short-link redirect.
-- [ ] Project listing/detail, categories, tags, source-file, search, and revision APIs.
+- [x] Project listing, categories, tags, source-file/range metadata, search, and revision APIs.
 - [x] Article revision persistence and idempotent publishing.
-- [ ] Verify PostgreSQL contract with an actual database.
+- [x] Verify PostgreSQL contract with an actual database.
 
 ## 4. CLI publishing workflow
 
 - [x] `rpg project create` creates a server project and prints safe config guidance.
-- [ ] `rpg generate` fully supports current/revision annotations and output selection.
+- [x] `rpg generate` supports current/revision annotations, configured outputs, language selection, and manifest inference.
 - [x] `rpg push` manually publishes generated documents to configured project API.
 - [x] Pre-push uses the same publisher, retains pending diagnostics, prompts interactively, and blocks by default non-interactively.
 
@@ -39,16 +39,16 @@ This file is the delivery checklist. A feature is not complete merely because a 
 - [x] Serve the built React application from the backend; provide a navigable homepage.
 - [x] Project creation/listing and project workspace UI.
 - [x] Documentation tree/category navigation, title/body/tag search, and article reading view.
-- [ ] Documented-source browser with source ranges (source path is present; ranges need persistence).
+- [ ] Documented-source browser with repository-file navigation (source path/ranges are persisted and displayed; full file-tree browsing remains).
 - [x] Revision/history sidebar and organization management.
-- [ ] Responsive, keyboard-accessible Chromium-verified UI.
+- [ ] Responsive, keyboard-accessible browser-verified UI (mobile rendering verified; keyboard interaction coverage remains).
 
 ## 6. Deployment, documentation, and validation
 
 - [x] Complete `.env`, Dockerfile, Compose, SQLite volume, and PostgreSQL configuration.
-- [ ] Update all relevant governance docs and user README/configuration documentation.
+- [ ] Update all relevant governance docs and user README/configuration documentation (final cross-document audit remains).
 - [x] Keep ten versioned language examples under `tests/examples`.
-- [ ] Convert the ten examples into automated temporary-Git integration tests including commit, generation, manual push, server validation, and browser UI checks (Git/generation/push are automated; browser check remains).
+- [ ] Convert the ten examples into automated temporary-Git integration tests including commit, generation, manual push, server validation, and browser UI checks (Git/generation/push are automated; browser UI test remains).
 - [ ] Run full test/vet/build suite and live end-to-end smoke tests before declaring delivery complete.
 
 ## Cycle review

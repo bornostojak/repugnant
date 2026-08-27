@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="520" viewBox="0 0 640 520" font-family="Inter, ui-sans-serif, system-ui, sans-serif">
+  <rect width="640" height="520" fill="#f7f9fb"/>
+  <rect x="0" y="0" width="640" height="520" fill="none" stroke="#d7e0e7"/>
+
+  <text x="24" y="40" font-size="13" font-weight="650" fill="#425563">Project</text>
+  <rect x="24" y="48" width="592" height="36" rx="4" fill="#ffffff" stroke="#bdc9d2"/>
+  <text x="36" y="71" font-size="14" fill="#17212b">Orders Service</text>
+
+  <text x="24" y="116" font-size="13" font-weight="650" fill="#425563">Search</text>
+  <rect x="24" y="124" width="592" height="36" rx="4" fill="#ffffff" stroke="#bdc9d2"/>
+  <text x="36" y="147" font-size="14" fill="#9aa7b1">Titles, contents, tags</text>
+
+  <text x="24" y="200" font-size="13" font-weight="700" letter-spacing=".5" fill="#607482">DOCUMENTATION</text>
+
+  <text x="24" y="234" font-size="15" fill="#42606d">Services › Cache</text>
+  <text x="40" y="264" font-size="15" fill="#38505d">Cache resolution strategy</text>
+  <rect x="24" y="278" width="592" height="30" fill="#effaf9"/>
+  <line x1="24" y1="278" x2="24" y2="308" stroke="#0d9488" stroke-width="3"/>
+  <text x="40" y="298" font-size="15" font-weight="700" fill="#075f5b">Stampede guard</text>
+
+  <text x="24" y="344" font-size="15" fill="#42606d">Services › Auth</text>
+  <text x="40" y="374" font-size="15" fill="#38505d">Session token rotation</text>
+
+  <text x="24" y="410" font-size="15" fill="#42606d">Frontend › Search</text>
+  <text x="40" y="440" font-size="15" fill="#38505d">Debounced search index</text>
+
+  <text x="24" y="476" font-size="15" fill="#42606d">Infrastructure › Deployment</text>
+  <text x="40" y="506" font-size="15" fill="#38505d">Blue-green rollout</text>
+</svg>
