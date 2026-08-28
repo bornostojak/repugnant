@@ -17,7 +17,27 @@ import (
 	"github.com/bornostojak/repugnant/internal/project"
 )
 
-const version = "0.1.0-dev"
+// version is overridable at build time via -ldflags "-X main.version=...".
+var version = "0.1.0-dev"
+
+const usageText = `rpg — documentation that stays close to code
+
+Usage:
+  rpg <command> [flags]
+
+Commands:
+  init                    Write rpg.conf.yaml, create .rpg/, install Git hooks
+  generate                Parse sources and write/update local Markdown docs
+  push                    Publish generated docs to the configured project API
+  status                  Show whether a previous publish is pending
+  project create          Create a project on a server and print config guidance
+  hook <pre-commit|pre-push>  Run an installed Git hook (invoked by Git)
+  help                    Show this help
+
+Flags:
+  --init-hooks            Install or repair only the Git hooks
+  --version               Print the CLI version
+`
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
@@ -27,26 +47,39 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
-	if len(args) > 0 && args[0] == "init" {
+	if len(args) == 0 {
+		return usage(stdout)
+	}
+	switch args[0] {
+	case "help", "-h", "--help":
+		return usage(stdout)
+	case "init":
 		return initialize(false, stdout)
-	}
-	if len(args) > 0 && args[0] == "generate" {
+	case "generate":
 		return generate(stdout)
-	}
-	if len(args) > 0 && args[0] == "push" {
+	case "push":
 		return push(stdout)
-	}
-	if len(args) > 1 && args[0] == "project" && args[1] == "create" {
-		return createProject(args[2:], stdout)
-	}
-	if len(args) > 0 && args[0] == "hook" {
+	case "status":
+		return status(stdout)
+	case "project":
+		if len(args) > 1 && args[1] == "create" {
+			return createProject(args[2:], stdout)
+		}
+		return fmt.Errorf("usage: rpg project create --server http://host:8080 --name 'My project' [--slug my-project]")
+	case "hook":
 		return runHook(args[1:], stdout, stderr)
+	}
+	if !strings.HasPrefix(args[0], "-") {
+		return fmt.Errorf("unknown command %q; run 'rpg help' for usage", args[0])
 	}
 	flags := flag.NewFlagSet("rpg", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	showVersion := flags.Bool("version", false, "print version")
 	initHooks := flags.Bool("init-hooks", false, "install or repair hooks only")
 	if err := flags.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return usage(stdout)
+		}
 		return err
 	}
 	if *showVersion {
@@ -56,7 +89,28 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if *initHooks {
 		return initialize(true, stdout)
 	}
-	_, err := fmt.Fprintln(stdout, "rpg: documentation that stays close to code")
+	return usage(stdout)
+}
+
+func usage(stdout io.Writer) error {
+	_, err := fmt.Fprint(stdout, usageText)
+	return err
+}
+
+func status(stdout io.Writer) error {
+	root, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	rec, err := docs.LoadPending(root)
+	if err != nil {
+		return err
+	}
+	if rec == nil {
+		_, err = fmt.Fprintln(stdout, "rpg status: no pending documentation")
+		return err
+	}
+	_, err = fmt.Fprintf(stdout, "rpg status: publish pending since %s\n  error: %s\n  run 'rpg push' to retry\n", rec.FailedAt, rec.Error)
 	return err
 }
 func createProject(args []string, stdout io.Writer) error {

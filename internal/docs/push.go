@@ -63,6 +63,30 @@ func Push(root string) (int, error) {
 	return n, nil
 }
 
+// PendingRecord is the compact diagnostic RecordPending writes and LoadPending
+// reads back for `rpg status`.
+type PendingRecord struct {
+	FailedAt string `json:"failed_at"`
+	Error    string `json:"error"`
+}
+
+// LoadPending returns the recorded pending-publish diagnostic, or (nil, nil)
+// when there is nothing pending.
+func LoadPending(root string) (*PendingRecord, error) {
+	b, err := os.ReadFile(filepath.Join(root, ".rpg", "pending.json"))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var rec PendingRecord
+	if err := json.Unmarshal(b, &rec); err != nil {
+		return nil, fmt.Errorf("read pending publish state: %w", err)
+	}
+	return &rec, nil
+}
+
 // RecordPending leaves a compact, ignored diagnostic for a later successful
 // rpg push. The Markdown itself remains authoritative in the configured docs
 // directory, so this cache cannot lose user edits.
