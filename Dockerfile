@@ -18,6 +18,7 @@ RUN addgroup -S rpg && adduser -S rpg -G rpg
 WORKDIR /app
 COPY --from=server-build /out/rpg-server ./rpg-server
 COPY --from=web-build /src/web/dist ./web
+RUN mkdir -p /app/data && chown -R rpg:rpg /app/data
 USER rpg
 EXPOSE 8080
 ENV RPG_HTTP_ADDR=0.0.0.0:8080
