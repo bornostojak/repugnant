@@ -89,14 +89,14 @@ code {
 ```c
 // docs: #ROOT/docs/....
 or
-// docs: https://rpg.companysite.com/d/project/feature
+// docs: https://rpg.companysite.com/a/project/feature
 
 code {
     ...
 
     // docs: #/feat:line:line
     or
-    // docs: https://rpg.companysite.com/d/project/feature#heading
+    // docs: https://rpg.companysite.com/a/project/feature#heading
     tricky_code_to_be_quoted {
     }
     // !rPg_end_quote

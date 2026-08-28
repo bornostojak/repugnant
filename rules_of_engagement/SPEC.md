@@ -52,6 +52,6 @@ Local docs are official output when selected and should be committed. They remai
 
 Generated Markdown begins with title and a compact metadata table: author name/email from Git config by default, generation timestamp, revision number, and web link if configured. It contains revision sections appended in order. Do not use commit hashes.
 
-The backend stores article identity, current organization, revisions, source file/range information, tags, author identity, timestamps, and quoted-code snapshots. URLs are `/d/{article-id}` for latest and `/d/{article-id}/{revision}` for a historical revision. Each article revision is retained.
+The backend stores article identity, current organization, revisions, source file/range information, tags, author identity, timestamps, and quoted-code snapshots. URLs are `/a/{article-id}` for latest and `/a/{article-id}/{revision}` for a historical revision. Each article revision is retained.
 
 V1 web access is unauthenticated and must be documented as suitable only for trusted local/private networks; it is not safe to expose publicly. The web UI provides a category tree, title/full-text/tag search, and a VS Code-like browser limited to files containing rpg documentation. It supports organization of categories/groups/tags and a readable revision history. Later web-only manual revision branching is deferred.

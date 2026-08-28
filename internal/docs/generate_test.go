@@ -132,6 +132,52 @@ func TestGenerateHonorsConfiguredLanguages(t *testing.T) {
 	}
 }
 
+// TestGenerateEmbedsWebLinkInMarker verifies that when the project publishes to
+// a web UI, the rewritten source marker carries a clickable /a/{id} link, the
+// parser still recovers just the ID, and a second run is a clean no-op.
+func TestGenerateEmbedsWebLinkInMarker(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rpg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := "version: 1\nlangs: [go]\noutput:\n  docs: {enabled: true, dir: docs}\n  web: {enabled: true, endpoint: 'http://127.0.0.1:8080'}\nhooks: {on_publish_failure: block}\nproject:\n  slug: demo\n  api_url: http://127.0.0.1:8080/api/projects/demo/articles\n  api_key: secret\n"
+	if err := os.WriteFile(filepath.Join(root, "rpg.conf.yaml"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "main.go")
+	if err := os.WriteFile(path, []byte("package main\n\n// $rPg: Cache resolution, cache\nfunc f() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := Generate(root); err != nil || n != 1 {
+		t.Fatalf("Generate = %d, %v", n, err)
+	}
+	updated, _ := os.ReadFile(path)
+	fields := strings.Fields(string(updated))
+	var id, link string
+	for i, v := range fields {
+		if v == "rPg:" && i+2 < len(fields) {
+			id, link = fields[i+1], fields[i+2]
+			break
+		}
+	}
+	if id == "" {
+		t.Fatalf("marker not rewritten with id: %s", updated)
+	}
+	if want := "http://127.0.0.1:8080/a/" + id; link != want {
+		t.Fatalf("marker web link = %q, want %q\n%s", link, want, updated)
+	}
+	// The generated doc's Web column points at the same permalink.
+	doc, _ := os.ReadFile(filepath.Join(root, "docs", id+".md"))
+	if !strings.Contains(string(doc), "/a/"+id+")") {
+		t.Fatalf("doc missing /a/ web link: %s", doc)
+	}
+	// Re-running must treat the linked marker as tracked (ID recovered from the
+	// first field), not mint a duplicate or error.
+	if n, err := Generate(root); err != nil || n != 0 {
+		t.Fatalf("second Generate = %d, %v (marker: %s)", n, err, updated)
+	}
+}
+
 func writeTestConfig(t *testing.T, root string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Join(root, ".rpg"), 0o755); err != nil {

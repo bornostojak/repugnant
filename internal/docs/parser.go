@@ -45,7 +45,9 @@ func Parse(path, source string) ([]Finding, error) {
 		}
 		f := Finding{Kind: kind, Start: i, End: i, Title: payload}
 		if kind == "stable" {
-			f.ID = payload
+			// A rewritten marker is "rPg: {id}" optionally followed by a
+			// clickable web link, so the ID is only the first field.
+			f.ID = firstField(payload)
 		}
 		if kind == "revision" {
 			f.ID, f.Title = splitRevision(payload)
@@ -158,6 +160,12 @@ func marker(s string) (string, string) {
 		return "end", ""
 	}
 	return "", ""
+}
+func firstField(s string) string {
+	if fields := strings.Fields(s); len(fields) > 0 {
+		return fields[0]
+	}
+	return ""
 }
 func splitRevision(s string) (string, string) {
 	parts := strings.SplitN(s, ":", 2)

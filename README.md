@@ -95,6 +95,14 @@ After the pre-commit hook runs `rpg generate`, that marker is rewritten in place
 // rPg: ICh1mDM-7Ej5
 ```
 
+When the project publishes to a web UI (`output.web.enabled: true`), the rewritten marker also carries the article's permalink, so you can jump from the code straight to the rendered page:
+
+```go
+// rPg: ICh1mDM-7Ej5 http://127.0.0.1:8099/a/ICh1mDM-7Ej5
+```
+
+Only the first field after `rPg:` is the ID; the link is informational and ignored on later runs.
+
 Now watch what happens with a **quoted** block when the implementation actually changes. This is the real annotation, edited a second time to explain a real change:
 
 ```go
@@ -126,7 +134,7 @@ Generation appends a **new revision** rather than overwriting the old one. Here 
 | Email | jane.doe@example.com |
 | Generated on | 2026-08-27T19:15:21Z |
 | Revision | 2 |
-| Web | [Open article](http://127.0.0.1:8099/d/VSVEZVLG1ipa) |
+| Web | [Open article](http://127.0.0.1:8099/a/VSVEZVLG1ipa) |
 | Category | Services/Cache |
 | Tags | cache, reliability |
 

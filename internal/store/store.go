@@ -207,7 +207,7 @@ func (s *Store) FindArticle(projectSlug, id string) (Article, error) {
 
 // FindArticleByID resolves an article by its globally unique ID alone, with
 // no project slug required. Article IDs are the primary key, so this backs
-// the project-agnostic /d/{id} permalink embedded in every generated doc.
+// the project-agnostic /a/{id} permalink embedded in every generated doc.
 func (s *Store) FindArticleByID(id string) (Article, error) {
 	var a Article
 	e := s.db.QueryRow(s.q(`SELECT id,short_id,project_slug,title,body,category,tags,source_path,source_range,revision,created_at FROM articles WHERE id=?`), id).Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Category, &a.Tags, &a.SourcePath, &a.SourceRange, &a.Revision, &a.CreatedAt)
@@ -230,7 +230,7 @@ func (s *Store) Revisions(projectSlug, id string) ([]Article, error) {
 }
 
 // RevisionsByID resolves revision history without a project slug, backing
-// the /d/{id}/{revision} permalink alongside FindArticleByID.
+// the /a/{id}/{revision} permalink alongside FindArticleByID.
 func (s *Store) RevisionsByID(id string) ([]Article, error) {
 	a, e := s.FindArticleByID(id)
 	if e != nil {

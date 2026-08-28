@@ -123,7 +123,7 @@ func GenerateWith(root string, opts GenerateOptions) (GenerateResult, error) {
 					return err
 				}
 				m.Articles[id] = manifestArticle{Path: rel, SourceRange: sourceRange(f), QuoteHash: quoteHash(f.Quote), Title: f.Title, Category: f.Category, Tags: f.Tags, Revision: 1}
-				lines[f.Start] = replaceMarker(lines[f.Start], id)
+				lines[f.Start] = replaceMarker(lines[f.Start], id, webArticleURL(c, id))
 				fileChanged, changed = true, changed+1
 			case "tracked":
 				record, known := m.Articles[f.ID]
@@ -155,7 +155,7 @@ func GenerateWith(root string, opts GenerateOptions) (GenerateResult, error) {
 				}
 				record.SourceRange = sourceRange(f)
 				m.Articles[f.ID] = record
-				lines[f.Start] = replaceMarker(lines[f.Start], f.ID)
+				lines[f.Start] = replaceMarker(lines[f.Start], f.ID, webArticleURL(c, f.ID))
 				fileChanged, changed = true, changed+1
 			}
 		}
@@ -213,10 +213,19 @@ func newID() string {
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
-func replaceMarker(line, id string) string {
+// replaceMarker rewrites an authoring marker ($rPg/?rPg/$rPg@) to its stable
+// "rPg: {id}" form. When the project publishes to a web UI, the article's URL is
+// appended so the marker becomes a clickable link straight to the rendered
+// article; the parser reads only the first field as the ID, so the link is
+// ignored on later runs.
+func replaceMarker(line, id, url string) string {
+	replacement := "rPg: " + id
+	if url != "" {
+		replacement += " " + url
+	}
 	for _, marker := range []string{"$rPg@", "$rPg", "?rPg"} {
 		if i := strings.Index(line, marker); i >= 0 {
-			return line[:i] + "rPg: " + id
+			return line[:i] + replacement
 		}
 	}
 	return line
@@ -235,7 +244,7 @@ func webArticleURL(c project.Config, id string) string {
 	if !c.Output.Web.Enabled {
 		return ""
 	}
-	return strings.TrimRight(c.Output.Web.Endpoint, "/") + "/d/" + id
+	return strings.TrimRight(c.Output.Web.Endpoint, "/") + "/a/" + id
 }
 
 var revisionMetadata = regexp.MustCompile(`(?m)^\| Revision \| \d+ \|$`)

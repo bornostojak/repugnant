@@ -38,8 +38,8 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("GET /api/projects/{slug}/articles/{id}/revisions", s.listRevisions)
 		mux.HandleFunc("POST /api/projects/{slug}/articles", s.createArticle)
 		mux.HandleFunc("GET /p/{slug}/article/{id}/{revision}", s.articlePage)
-		mux.HandleFunc("GET /d/{id}", s.docPage)
-		mux.HandleFunc("GET /d/{id}/{revision}", s.docPage)
+		mux.HandleFunc("GET /a/{id}", s.docPage)
+		mux.HandleFunc("GET /a/{id}/{revision}", s.docPage)
 		mux.HandleFunc("GET /{shortID}", s.shortLink)
 	}
 	return s.logRequests(mux)
@@ -108,7 +108,7 @@ func WithWeb(api http.Handler, dir string) http.Handler {
 			files.ServeHTTP(w, r)
 			return
 		}
-		if !strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/p/") && !strings.HasPrefix(r.URL.Path, "/d/") && r.URL.Path != "/healthz" {
+		if !strings.HasPrefix(r.URL.Path, "/api/") && !strings.HasPrefix(r.URL.Path, "/p/") && !strings.HasPrefix(r.URL.Path, "/a/") && r.URL.Path != "/healthz" {
 			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
 			return
 		}
@@ -128,9 +128,9 @@ func (s *Server) articlePage(w http.ResponseWriter, r *http.Request) {
 	s.renderArticleAtRevision(w, r, a, revisions)
 }
 
-// docPage backs the project-agnostic /d/{id} and /d/{id}/{revision}
-// permalinks that SPEC.md requires and that every generated local doc embeds
-// as its "Web" link, resolved by article ID alone (no project slug needed).
+// docPage backs the project-agnostic /a/{id} and /a/{id}/{revision}
+// permalinks that every generated local doc embeds as its "Web" link, resolved
+// by article ID alone (no project slug needed).
 func (s *Server) docPage(w http.ResponseWriter, r *http.Request) {
 	a, e := s.store.FindArticleByID(r.PathValue("id"))
 	if e != nil {
