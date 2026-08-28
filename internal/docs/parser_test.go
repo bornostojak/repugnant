@@ -19,6 +19,27 @@ func TestParseRejectsUnclosedQuote(t *testing.T) {
 	}
 }
 
+// After generation a quoted article is left as a title-only marker with inert
+// "~ <backlink>" lines and no closing !rPg. Re-parsing must skip those backlink
+// lines (never folding them into the retained code) and yield a single no-op
+// stable finding whose BodyStart points past them.
+func TestParseSkipsBacklinkLines(t *testing.T) {
+	src := "func f() {\n  // rPg: Cache guard\n  // ~ http://host/a/abc123\n  // ~ ../docs/abc123.md\n  work()\n}\n"
+	got, err := Parse("f.go", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Kind != "stable" {
+		t.Fatalf("want one stable finding, got %+v", got)
+	}
+	if len(got[0].Markdown) != 0 {
+		t.Fatalf("backlink lines must not be captured as markdown: %+v", got[0].Markdown)
+	}
+	if got[0].BodyStart != 4 {
+		t.Fatalf("BodyStart should skip the two ~ lines to the code at line index 4, got %d", got[0].BodyStart)
+	}
+}
+
 // A plain stable reference (a standalone article already generated once)
 // must never absorb an unrelated !rPg that belongs to a later, independent
 // quote in the same file: it has to stay a no-op "stable" finding instead of

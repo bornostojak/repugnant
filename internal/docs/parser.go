@@ -72,8 +72,16 @@ func Parse(path, source string) ([]Finding, error) {
 				j++
 				continue
 			}
+			// A "~ <ref>" line is an inert web/docs backlink emitted by a
+			// previous generation; skip it so it is neither treated as prose
+			// nor absorbed into a following quoted region.
+			if strings.HasPrefix(b, "~") {
+				j++
+				continue
+			}
 			break
 		}
+		f.BodyStart = j
 		if kind == "quote" || kind == "stable" || kind == "revision" {
 			end := -1
 			for k := j; k < len(lines); k++ {

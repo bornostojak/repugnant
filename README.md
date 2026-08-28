@@ -70,7 +70,7 @@ Two marker families, both written as ordinary language comments:
 |---|---|
 | `$rPg: Title` or `$rPg(Category/Title, tag, tag)` | Start a **standalone article**. Continuation lines use `$~`. |
 | `?rPg: Title` or `?rPg(Category/Title, tag, tag)` … `!rPg` | Start a **quoted-code article**. Everything between the marker and the closing `!rPg` is captured verbatim (with safe common indentation stripped) and rendered under the article as `## Documented code`. Continuation lines use `?~`. |
-| `rPg: {id}` | What the tool rewrites your marker into after first generation. Stable forever; never edit by hand. |
+| `rPg: {title}` + `~ {backlink}` lines | What the tool rewrites your marker into after first generation: the title, plus `~` backlinks to the web article and/or the local Markdown file. The `$~`/`?~` prose is moved into the article. Stable; edit the title freely, leave the `~` lines to the tool. |
 | `$rPg@{id}: New title, tag` + `$~` lines | Append a **new revision** to an existing article. Required whenever a tracked quote's code changes. |
 
 A worked example, straight out of this repository's own demo fixtures:
@@ -89,19 +89,20 @@ func Resolve(key string, cache map[string]string, origin func(string) string) st
 }
 ```
 
-After the pre-commit hook runs `rpg generate`, that marker is rewritten in place to a permanent reference:
+After the pre-commit hook runs `rpg generate`, the `$~`/`?~` prose is **moved** into the generated article and the marker collapses to a clean, minimal reference — just the title plus backlinks to where the documentation actually lives:
 
 ```go
-// rPg: ICh1mDM-7Ej5
+// rPg: Cache resolution strategy
+// ~ docs/ICh1mDM-7Ej5.md
 ```
 
-When the project publishes to a web UI (`output.web.enabled: true`), the rewritten marker also carries the article's permalink, so you can jump from the code straight to the rendered page:
+The `~` line is a relative path to the Markdown file, so `gf` in Vim (or a click in most editors) opens the docs straight from the code. When the project also publishes to a web UI (`output.web.enabled: true`), the web permalink is added first:
 
 ```go
-// rPg: ICh1mDM-7Ej5 http://127.0.0.1:8099/a/ICh1mDM-7Ej5
+// rPg: Cache resolution strategy
+// ~ http://127.0.0.1:8099/a/ICh1mDM-7Ej5
+// ~ docs/ICh1mDM-7Ej5.md
 ```
-
-Only the first field after `rPg:` is the ID; the link is informational and ignored on later runs.
 
 Now watch what happens with a **quoted** block when the implementation actually changes. This is the real annotation, edited a second time to explain a real change:
 
@@ -289,7 +290,7 @@ Runtime/container behavior (database driver, listen address, PostgreSQL DSN) is 
 |---|---|
 | `rpg init` | Writes `rpg.conf.yaml`, creates the ignored `.rpg/` workspace, installs Git hooks. Idempotent — safe to re-run. |
 | `rpg --init-hooks` | Installs/repairs only the hooks; leaves config and `.rpg/` untouched. An existing hook is preserved as a `.rpg-backup` and still runs. |
-| `rpg generate` | Parses enabled source files, writes/updates local Markdown, updates `.rpg/manifest.json`, rewrites markers to stable `rPg: {id}` form. Fails loudly on drifted quotes or unknown IDs. |
+| `rpg generate` | Parses enabled source files, writes/updates local Markdown, updates `.rpg/manifest.json`, and rewrites markers to the clean `rPg: {title}` + `~ {backlink}` form (moving `$~`/`?~` prose into the article). `--staged` restricts it to files staged in git. |
 | `rpg push` | Publishes every file currently in `output.docs.dir` to the configured project API. Idempotent against unchanged server content. |
 | `rpg project create --server <url> --name "<name>" [--slug <slug>]` | Creates a project on a running server and prints the `output.web` / `project` config block to paste into `rpg.conf.yaml`. |
 | `rpg hook pre-commit` / `rpg hook pre-push` | What the installed Git hooks actually invoke. You normally never call these directly. |

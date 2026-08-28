@@ -28,17 +28,24 @@ Comment prefixes are language-specific. Examples below use `//`; the marker appe
 
 `$~` only continues a standalone `$rPg` article. `?~` only continues a quote article. A quote begins at `?rPg` and ends at `!rPg`; both are required. The quoted code is the exact intervening source, excluding rpg annotation lines. Its relative indentation is preserved; only common leading indentation that is safe to remove is removed. Parsing must not corrupt heredocs, YAML indentation, QML, or language-specific block structure.
 
-Generation assigns a permanent opaque, URL-safe alphanumeric article ID (for example `s9Aa3A3al`), never a title slug. A generated source reference is `rPg: {id}` (with the language comment prefix). For a quoted range, its terminating `!rPg` remains so future source changes can be detected.
-
-To append a revision, write:
+Generation assigns a permanent opaque, URL-safe alphanumeric article ID (for example `s9Aa3A3al`), never a title slug. After generation the marker collapses to a clean, minimal reference: the display title on the `rPg:` line, followed by one `~ {backlink}` line per configured output — the web permalink (`{endpoint}/a/{id}`) first when web publishing is enabled, then the article's Markdown file as a path relative to the source file (so `gf` opens it). The `$~`/`?~` prose is **moved** into the article, not left in the source, and for a quoted range the terminating `!rPg` is removed while the quoted code stays in place. The ID is recoverable from either backlink (`.../a/{id}` or `.../{id}.md`).
 
 ```text
-// rPg: s9Aa3A3al
+// rPg: Cache resolution strategy
+// ~ http://127.0.0.1:8080/a/s9Aa3A3al
+// ~ ../../docs/s9Aa3A3al.md
+```
+
+Because `!rPg` is removed, a generated quote is a one-time snapshot: rpg no longer detects when that code later drifts from its documentation. Documentation is kept current by re-running generation and by explicit revisions, not by a drift block.
+
+To append a revision, write a `$rPg@{id}` annotation using the ID from a backlink:
+
+```text
 // $rPg@s9Aa3A3al: New display title, optional-tag
 // $~ New explanatory Markdown
 ```
 
-The hook normalizes the source back to its stable `rPg: {id}` reference after generation. The ID never changes when a title does. The current display title is the latest title; prior titles remain history.
+The ID never changes when a title does. The current display title is the latest title; prior titles remain history.
 
 ## Generation and hooks
 

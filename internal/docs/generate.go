@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -113,7 +114,7 @@ func GenerateWith(root string, opts GenerateOptions) (GenerateResult, error) {
 			return nil
 		}
 		lines := strings.Split(string(data), "\n")
-		fileChanged := false
+		var edits []lineEdit
 		for _, f := range findings {
 			switch f.Kind {
 			case "article", "quote":
@@ -123,8 +124,8 @@ func GenerateWith(root string, opts GenerateOptions) (GenerateResult, error) {
 					return err
 				}
 				m.Articles[id] = manifestArticle{Path: rel, SourceRange: sourceRange(f), QuoteHash: quoteHash(f.Quote), Title: f.Title, Category: f.Category, Tags: f.Tags, Revision: 1}
-				lines[f.Start] = replaceMarker(lines[f.Start], id, webArticleURL(c, id))
-				fileChanged, changed = true, changed+1
+				edits = append(edits, markerEdits(lines, f, buildRefs(c, path, out, id), f.Title)...)
+				changed++
 			case "tracked":
 				record, known := m.Articles[f.ID]
 				if !known {
@@ -155,11 +156,16 @@ func GenerateWith(root string, opts GenerateOptions) (GenerateResult, error) {
 				}
 				record.SourceRange = sourceRange(f)
 				m.Articles[f.ID] = record
-				lines[f.Start] = replaceMarker(lines[f.Start], f.ID, webArticleURL(c, f.ID))
-				fileChanged, changed = true, changed+1
+				title := f.Title
+				if title == "" {
+					title = record.Title
+				}
+				edits = append(edits, markerEdits(lines, f, buildRefs(c, path, out, f.ID), title)...)
+				changed++
 			}
 		}
-		if fileChanged {
+		if len(edits) > 0 {
+			lines = applyLineEdits(lines, edits)
 			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
 				return err
 			}
@@ -213,22 +219,81 @@ func newID() string {
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
-// replaceMarker rewrites an authoring marker ($rPg/?rPg/$rPg@) to its stable
-// "rPg: {id}" form. When the project publishes to a web UI, the article's URL is
-// appended so the marker becomes a clickable link straight to the rendered
-// article; the parser reads only the first field as the ID, so the link is
-// ignored on later runs.
-func replaceMarker(line, id, url string) string {
-	replacement := "rPg: " + id
-	if url != "" {
-		replacement += " " + url
+// lineEdit replaces the inclusive line range [start, end] with replacement.
+type lineEdit struct {
+	start, end  int
+	replacement []string
+}
+
+// markerEdits rewrites an authoring marker into the clean tracked form:
+//
+//	// rPg: <title>
+//	// ~ <web link>        (only when web output is configured)
+//	// ~ <relative docs path>
+//
+// The $~/?~ prose lines are dropped (already rendered into the article) and, for
+// quoted findings, the closing !rPg line is removed while the quoted code stays.
+// The returned edits are applied bottom-up so line shifts do not disturb one
+// another.
+func markerEdits(lines []string, f Finding, refs []string, title string) []lineEdit {
+	prefix := markerPrefix(lines[f.Start])
+	header := []string{prefix + "rPg: " + title}
+	for _, r := range refs {
+		header = append(header, prefix+"~ "+r)
 	}
-	for _, marker := range []string{"$rPg@", "$rPg", "?rPg"} {
+	edits := []lineEdit{{start: f.Start, end: f.BodyStart - 1, replacement: header}}
+	if f.End > f.Start {
+		edits = append(edits, lineEdit{start: f.End, end: f.End})
+	}
+	return edits
+}
+
+// markerPrefix returns the indentation and comment opener that precede a marker
+// token, e.g. "    // " or "# ", so rewritten lines keep the file's style.
+func markerPrefix(line string) string {
+	for _, marker := range []string{"$rPg@", "$rPg", "?rPg", "rPg:"} {
 		if i := strings.Index(line, marker); i >= 0 {
-			return line[:i] + replacement
+			return line[:i]
 		}
 	}
-	return line
+	return ""
+}
+
+// buildRefs assembles the backlinks a rewritten marker carries: the web article
+// URL first (when web publishing is configured) and then the article's Markdown
+// file relative to the source file, so `gf` opens it straight from an editor.
+func buildRefs(c project.Config, sourcePath, docsDir, id string) []string {
+	var refs []string
+	if url := webArticleURL(c, id); url != "" {
+		refs = append(refs, url)
+	}
+	if c.Output.Docs.Enabled {
+		refs = append(refs, docsRelPath(sourcePath, docsDir, id))
+	}
+	return refs
+}
+
+func docsRelPath(sourcePath, docsDir, id string) string {
+	target := filepath.Join(docsDir, id+".md")
+	rel, err := filepath.Rel(filepath.Dir(sourcePath), target)
+	if err != nil {
+		return filepath.ToSlash(target)
+	}
+	return filepath.ToSlash(rel)
+}
+
+// applyLineEdits applies non-overlapping edits from the bottom of the file up so
+// each edit's recorded line numbers stay valid as earlier ones change length.
+func applyLineEdits(lines []string, edits []lineEdit) []string {
+	sort.Slice(edits, func(i, j int) bool { return edits[i].start > edits[j].start })
+	for _, e := range edits {
+		rebuilt := make([]string, 0, len(lines)-(e.end-e.start+1)+len(e.replacement))
+		rebuilt = append(rebuilt, lines[:e.start]...)
+		rebuilt = append(rebuilt, e.replacement...)
+		rebuilt = append(rebuilt, lines[e.end+1:]...)
+		lines = rebuilt
+	}
+	return lines
 }
 func gitIdentity(root string) (string, string) {
 	get := func(key, fallback string) string {

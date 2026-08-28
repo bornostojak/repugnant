@@ -7,11 +7,16 @@ import (
 	"testing"
 )
 
-func TestGenerateTracksQuoteAndAppendsExplicitRevision(t *testing.T) {
+// TestGenerateRewritesCleanMarkerAndAppendsRevision covers the full clean-output
+// contract: authoring markers and their $~/?~ prose are moved into the doc, the
+// closing !rPg is dropped while the quoted code stays, the marker keeps only the
+// title plus a docs backlink, re-generation is a no-op, and an explicit
+// revision keyed by "$rPg@{id}" still appends to the article.
+func TestGenerateRewritesCleanMarkerAndAppendsRevision(t *testing.T) {
 	root := t.TempDir()
 	writeTestConfig(t, root)
 	path := filepath.Join(root, "main.go")
-	source := "package main\n\n// ?rPg(Platform/Caching/Resolve cache, performance, redis)\n// ?~ Resolves a cache entry before the database.\n// context line\nif hit {\n  return value\n}\n// !rPg\n"
+	source := "package main\n\n// ?rPg(Platform/Caching/Resolve cache, performance, redis)\n// ?~ Resolves a cache entry before the database.\nif hit {\n  return value\n}\n// !rPg\n"
 	if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -20,36 +25,47 @@ func TestGenerateTracksQuoteAndAppendsExplicitRevision(t *testing.T) {
 		t.Fatalf("Generate = %d, %v", n, err)
 	}
 	updated, _ := os.ReadFile(path)
-	parts := strings.Fields(string(updated))
-	var id string
-	for i, value := range parts {
-		if value == "rPg:" && i+1 < len(parts) {
-			id = parts[i+1]
-			break
+	// Authoring syntax and prose are gone; the quoted code remains in place.
+	for _, gone := range []string{"?rPg", "$rPg", "?~", "$~", "!rPg", "Resolves a cache entry"} {
+		if strings.Contains(string(updated), gone) {
+			t.Fatalf("expected %q removed from source:\n%s", gone, updated)
 		}
 	}
-	if id == "" {
-		t.Fatalf("marker not replaced: %s", updated)
+	if !strings.Contains(string(updated), "// rPg: Resolve cache") {
+		t.Fatalf("marker title not written:\n%s", updated)
 	}
-	docPath := filepath.Join(root, "docs", id+".md")
-	doc, err := os.ReadFile(docPath)
-	if err != nil || !strings.Contains(string(doc), "| Category | Platform/Caching |") || !strings.Contains(string(doc), "performance, redis") {
-		t.Fatalf("doc = %s, %v", doc, err)
+	if !strings.Contains(string(updated), "return value") {
+		t.Fatalf("quoted code was not retained:\n%s", updated)
 	}
-	if err := os.WriteFile(path, []byte(strings.Replace(string(updated), "return value", "return refreshed", 1)), 0o644); err != nil {
+
+	// Exactly one article was written; recover its id from the docs directory.
+	found, _ := filepath.Glob(filepath.Join(root, "docs", "*.md"))
+	if len(found) != 1 {
+		t.Fatalf("expected 1 doc, got %v", found)
+	}
+	id := strings.TrimSuffix(filepath.Base(found[0]), ".md")
+	if !strings.Contains(string(updated), "// ~ docs/"+id+".md") {
+		t.Fatalf("marker missing docs backlink for %s:\n%s", id, updated)
+	}
+	doc, _ := os.ReadFile(found[0])
+	if !strings.Contains(string(doc), "| Category | Platform/Caching |") || !strings.Contains(string(doc), "performance, redis") || !strings.Contains(string(doc), "Resolves a cache entry") {
+		t.Fatalf("doc missing moved metadata/prose: %s", doc)
+	}
+
+	// Re-generation is a clean no-op.
+	if n, err := Generate(root); err != nil || n != 0 {
+		t.Fatalf("second Generate = %d, %v", n, err)
+	}
+
+	// An explicit revision keyed by the id still appends to the article.
+	revision := "package main\n\n// $rPg@" + id + ": Cache invalidation\n// $~ Explain why the branch changed.\n"
+	if err := os.WriteFile(path, []byte(revision), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Generate(root); err == nil || !strings.Contains(err.Error(), "$rPg@"+id) {
-		t.Fatalf("wanted drift error, got %v", err)
-	}
-	revision := "// $rPg@" + id + ": Cache invalidation\n// $~ Explain why the branch changed.\n// context line\nif hit {\n  return refreshed\n}\n// !rPg\n"
-	if err := os.WriteFile(path, []byte("package main\n\n"+revision), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if n, err = Generate(root); err != nil || n != 1 {
+	if n, err := Generate(root); err != nil || n != 1 {
 		t.Fatalf("revision Generate = %d, %v", n, err)
 	}
-	doc, _ = os.ReadFile(docPath)
+	doc, _ = os.ReadFile(found[0])
 	if !strings.Contains(string(doc), "# Revision 2") || !strings.Contains(string(doc), "Explain why") {
 		t.Fatalf("revision missing: %s", doc)
 	}
@@ -78,45 +94,6 @@ func TestGenerateStandaloneArticleFollowedByLaterQuoteIsStable(t *testing.T) {
 	}
 }
 
-// Regression test: when a tracked quote's own content is unchanged but its
-// location in the file shifts (e.g. lines were added above it), the manifest
-// must refresh the stored source range so later publishes don't carry stale
-// line numbers forever.
-func TestGenerateRefreshesSourceRangeWhenQuoteMoves(t *testing.T) {
-	root := t.TempDir()
-	writeTestConfig(t, root)
-	path := filepath.Join(root, "main.go")
-	source := "package main\n\n// ?rPg(Platform/Caching/Resolve, cache)\n// ?~ Explains it.\nwork()\n// !rPg\n"
-	if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Generate(root); err != nil {
-		t.Fatal(err)
-	}
-	before, err := os.ReadFile(filepath.Join(root, ".rpg", "manifest.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(before), `"SourceRange": "3-6"`) {
-		t.Fatalf("unexpected initial source range: %s", before)
-	}
-	updated, _ := os.ReadFile(path)
-	shifted := "// unrelated leading comment\n// another one\n" + string(updated)
-	if err := os.WriteFile(path, []byte(shifted), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if n, err := Generate(root); err != nil || n != 0 {
-		t.Fatalf("shifted Generate = %d, %v", n, err)
-	}
-	after, err := os.ReadFile(filepath.Join(root, ".rpg", "manifest.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(after), `"SourceRange": "3-6"`) {
-		t.Fatalf("source range was not refreshed after the quote moved: %s", after)
-	}
-}
-
 func TestGenerateHonorsConfiguredLanguages(t *testing.T) {
 	root := t.TempDir()
 	writeTestConfig(t, root)
@@ -132,10 +109,10 @@ func TestGenerateHonorsConfiguredLanguages(t *testing.T) {
 	}
 }
 
-// TestGenerateEmbedsWebLinkInMarker verifies that when the project publishes to
-// a web UI, the rewritten source marker carries a clickable /a/{id} link, the
-// parser still recovers just the ID, and a second run is a clean no-op.
-func TestGenerateEmbedsWebLinkInMarker(t *testing.T) {
+// TestGenerateEmbedsWebAndDocsBacklinks verifies that when both web and docs
+// output are configured, the rewritten marker carries the web /a/{id} link first
+// and the relative docs path second, and that re-generation is a clean no-op.
+func TestGenerateEmbedsWebAndDocsBacklinks(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".rpg"), 0o755); err != nil {
 		t.Fatal(err)
@@ -152,27 +129,20 @@ func TestGenerateEmbedsWebLinkInMarker(t *testing.T) {
 		t.Fatalf("Generate = %d, %v", n, err)
 	}
 	updated, _ := os.ReadFile(path)
-	fields := strings.Fields(string(updated))
-	var id, link string
-	for i, v := range fields {
-		if v == "rPg:" && i+2 < len(fields) {
-			id, link = fields[i+1], fields[i+2]
-			break
-		}
+	found, _ := filepath.Glob(filepath.Join(root, "docs", "*.md"))
+	if len(found) != 1 {
+		t.Fatalf("expected 1 doc, got %v", found)
 	}
-	if id == "" {
-		t.Fatalf("marker not rewritten with id: %s", updated)
-	}
-	if want := "http://127.0.0.1:8080/a/" + id; link != want {
-		t.Fatalf("marker web link = %q, want %q\n%s", link, want, updated)
+	id := strings.TrimSuffix(filepath.Base(found[0]), ".md")
+	wantHeader := "// rPg: Cache resolution\n// ~ http://127.0.0.1:8080/a/" + id + "\n// ~ docs/" + id + ".md\n"
+	if !strings.Contains(string(updated), wantHeader) {
+		t.Fatalf("marker header = \n%s\nwant to contain:\n%s", updated, wantHeader)
 	}
 	// The generated doc's Web column points at the same permalink.
-	doc, _ := os.ReadFile(filepath.Join(root, "docs", id+".md"))
+	doc, _ := os.ReadFile(found[0])
 	if !strings.Contains(string(doc), "/a/"+id+")") {
 		t.Fatalf("doc missing /a/ web link: %s", doc)
 	}
-	// Re-running must treat the linked marker as tracked (ID recovered from the
-	// first field), not mint a duplicate or error.
 	if n, err := Generate(root); err != nil || n != 0 {
 		t.Fatalf("second Generate = %d, %v (marker: %s)", n, err, updated)
 	}
