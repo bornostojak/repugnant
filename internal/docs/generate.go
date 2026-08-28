@@ -27,29 +27,62 @@ type manifestArticle struct {
 	Revision                                      int
 }
 
-// Generate only creates docs for new markers, appends explicit revisions, and
-// rejects silent changes to tracked quote regions. Hand-edited Markdown is not
-// regenerated or overwritten.
+// GenerateOptions tunes a generation run.
+type GenerateOptions struct {
+	// Staged limits processing to files with staged (indexed) changes and
+	// ignores rPg markers in files that are not staged. The pre-commit hook
+	// uses this so a commit never absorbs markers from unrelated, unstaged
+	// files, and so the source rewrites it does make match what is committed.
+	Staged bool
+}
+
+// GenerateResult reports what a generation run produced.
+type GenerateResult struct {
+	// Count is the number of new articles plus appended revisions.
+	Count int
+	// ChangedFiles lists paths (relative to root) whose markers were rewritten
+	// in place, so callers such as the pre-commit hook can stage them.
+	ChangedFiles []string
+}
+
+// Generate is the backwards-compatible whole-working-tree entry point.
 func Generate(root string) (int, error) {
+	res, err := GenerateWith(root, GenerateOptions{})
+	return res.Count, err
+}
+
+// GenerateWith only creates docs for new markers, appends explicit revisions,
+// and rejects silent changes to tracked quote regions. Hand-edited Markdown is
+// not regenerated or overwritten. With GenerateOptions.Staged it restricts work
+// to files currently staged in git.
+func GenerateWith(root string, opts GenerateOptions) (GenerateResult, error) {
 	c, err := project.Load(root)
 	if err != nil {
-		return 0, err
+		return GenerateResult{}, err
 	}
 	if !c.Output.Docs.Enabled {
-		return 0, nil
+		return GenerateResult{}, nil
+	}
+	var staged map[string]bool
+	if opts.Staged {
+		staged, err = StagedFiles(root)
+		if err != nil {
+			return GenerateResult{}, err
+		}
 	}
 	out := filepath.Join(root, c.Output.Docs.Dir)
 	if err = os.MkdirAll(out, 0o755); err != nil {
-		return 0, err
+		return GenerateResult{}, err
 	}
 	m, err := loadManifest(root)
 	if err != nil {
-		return 0, err
+		return GenerateResult{}, err
 	}
 	name, email := gitIdentity(root)
 	enabled := c.EnabledLanguages(root)
 	changed := 0
 	manifestDirty := false
+	var changedFiles []string
 	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -61,6 +94,11 @@ func Generate(root string) (int, error) {
 			return nil
 		}
 		if len(enabled) > 0 && !enabled[Language(path)] {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		rel = filepath.ToSlash(rel)
+		if opts.Staged && !staged[rel] {
 			return nil
 		}
 		data, err := os.ReadFile(path)
@@ -77,7 +115,6 @@ func Generate(root string) (int, error) {
 		lines := strings.Split(string(data), "\n")
 		fileChanged := false
 		for _, f := range findings {
-			rel, _ := filepath.Rel(root, path)
 			switch f.Kind {
 			case "article", "quote":
 				id := newID()
@@ -123,17 +160,20 @@ func Generate(root string) (int, error) {
 			}
 		}
 		if fileChanged {
-			return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+				return err
+			}
+			changedFiles = append(changedFiles, rel)
 		}
 		return nil
 	})
 	if err != nil {
-		return changed, err
+		return GenerateResult{Count: changed, ChangedFiles: changedFiles}, err
 	}
 	if changed > 0 || manifestDirty {
 		err = saveManifest(root, m)
 	}
-	return changed, err
+	return GenerateResult{Count: changed, ChangedFiles: changedFiles}, err
 }
 func sourceRange(f Finding) string { return fmt.Sprintf("%d-%d", f.Start+1, f.End+1) }
 

@@ -56,7 +56,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case "init":
 		return initialize(false, stdout)
 	case "generate":
-		return generate(stdout)
+		return generate(args[1:], stdout)
 	case "push":
 		return push(stdout)
 	case "status":
@@ -161,16 +161,22 @@ func push(stdout io.Writer) error {
 	_, e = fmt.Fprintf(stdout, "published %d documentation article(s)\n", n)
 	return e
 }
-func generate(stdout io.Writer) error {
+func generate(args []string, stdout io.Writer) error {
+	flags := flag.NewFlagSet("rpg generate", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	staged := flags.Bool("staged", false, "only process files staged in git")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
 	root, e := os.Getwd()
 	if e != nil {
 		return e
 	}
-	n, e := docs.Generate(root)
+	res, e := docs.GenerateWith(root, docs.GenerateOptions{Staged: *staged})
 	if e != nil {
 		return e
 	}
-	_, e = fmt.Fprintf(stdout, "generated %d documentation article(s)\n", n)
+	_, e = fmt.Fprintf(stdout, "generated %d documentation article(s)\n", res.Count)
 	return e
 }
 
@@ -200,7 +206,17 @@ func runHook(args []string, stdout, stderr io.Writer) error {
 	}
 	if args[0] == "pre-commit" {
 		if _, err := os.Stat(project.ConfigFileName); err == nil {
-			if err := generate(stdout); err != nil {
+			root, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			// Only touch files that are part of this commit, and stage the
+			// marker rewrites back so the committed source matches the docs.
+			res, err := docs.GenerateWith(root, docs.GenerateOptions{Staged: true})
+			if err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(stdout, "generated %d documentation article(s)\n", res.Count); err != nil {
 				return err
 			}
 			config, err := project.Load(".")
@@ -210,7 +226,8 @@ func runHook(args []string, stdout, stderr io.Writer) error {
 			if !config.Output.Docs.Enabled {
 				return nil
 			}
-			cmd := exec.Command("git", "add", "--", config.Output.Docs.Dir)
+			paths := append([]string{config.Output.Docs.Dir}, res.ChangedFiles...)
+			cmd := exec.Command("git", append([]string{"add", "--"}, paths...)...)
 			cmd.Stdout, cmd.Stderr = stdout, stderr
 			if err := cmd.Run(); err != nil {
 				return fmt.Errorf("stage generated docs: %w", err)
