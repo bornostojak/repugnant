@@ -94,6 +94,57 @@ func TestGenerateStandaloneArticleFollowedByLaterQuoteIsStable(t *testing.T) {
 	}
 }
 
+// TestGenerateInlineRevision drives the fast revision syntax: append $#/$~ lines
+// under an existing clean marker and generate. The article keeps its title, the
+// doc gains a subtitled Revision 2, and the source returns to the clean marker.
+func TestGenerateInlineRevision(t *testing.T) {
+	root := t.TempDir()
+	writeTestConfig(t, root)
+	path := filepath.Join(root, "main.go")
+	if err := os.WriteFile(path, []byte("package main\n\n// $rPg: Cache resolution, cache\n// $~ Reads hit the cache first.\nfunc f() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := Generate(root); err != nil || n != 1 {
+		t.Fatalf("initial Generate = %d, %v", n, err)
+	}
+	found, _ := filepath.Glob(filepath.Join(root, "docs", "*.md"))
+	if len(found) != 1 {
+		t.Fatalf("expected 1 doc, got %v", found)
+	}
+	id := strings.TrimSuffix(filepath.Base(found[0]), ".md")
+
+	// Author a revision inline: keep the clean marker, append $#/$~ below it.
+	revised := "package main\n\n// rPg: Cache resolution\n// ~ docs/" + id + ".md\n// $# striped locks\n// $~ Now uses 16 striped locks keyed by hash.\nfunc f() {}\n"
+	if err := os.WriteFile(path, []byte(revised), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := Generate(root); err != nil || n != 1 {
+		t.Fatalf("revision Generate = %d, %v", n, err)
+	}
+
+	// The doc keeps its title, and gains a subtitled Revision 2 with the body.
+	doc, _ := os.ReadFile(found[0])
+	for _, want := range []string{"# Cache resolution", "# Revision 1", "# Revision 2 — striped locks", "Now uses 16 striped locks"} {
+		if !strings.Contains(string(doc), want) {
+			t.Fatalf("doc missing %q:\n%s", want, doc)
+		}
+	}
+
+	// The source is back to the clean marker (no $#/$~ left) and re-runs cleanly.
+	updated, _ := os.ReadFile(path)
+	for _, gone := range []string{"$#", "$~"} {
+		if strings.Contains(string(updated), gone) {
+			t.Fatalf("expected %q consumed from source:\n%s", gone, updated)
+		}
+	}
+	if !strings.Contains(string(updated), "// rPg: Cache resolution\n// ~ docs/"+id+".md") {
+		t.Fatalf("marker not restored to clean form:\n%s", updated)
+	}
+	if n, err := Generate(root); err != nil || n != 0 {
+		t.Fatalf("re-generate after revision = %d, %v", n, err)
+	}
+}
+
 func TestGenerateHonorsConfiguredLanguages(t *testing.T) {
 	root := t.TempDir()
 	writeTestConfig(t, root)

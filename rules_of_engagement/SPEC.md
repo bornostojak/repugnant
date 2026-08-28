@@ -38,14 +38,16 @@ Generation assigns a permanent opaque, URL-safe alphanumeric article ID (for exa
 
 Because `!rPg` is removed, a generated quote is a one-time snapshot: rpg no longer detects when that code later drifts from its documentation. Documentation is kept current by re-running generation and by explicit revisions, not by a drift block.
 
-To append a revision, write a `$rPg@{id}` annotation using the ID from a backlink:
+To append a revision, keep the generated marker in place and write `$#`/`$~` lines under its backlink — the article ID is recovered from the backlink, so it never has to be retyped:
 
 ```text
-// $rPg@s9Aa3A3al: New display title, optional-tag
+// rPg: Cache resolution strategy
+// ~ ../../docs/s9Aa3A3al.md
+// $# striped locks          (optional subtitle for this revision)
 // $~ New explanatory Markdown
 ```
 
-The ID never changes when a title does. The current display title is the latest title; prior titles remain history.
+Generation appends a new `# Revision N — {subtitle}` section to the article (keeping earlier revisions), then restores the source to the clean marker. `$#` is the revision's subtitle only; it labels Revision N and does **not** change the article's permanent title. The equivalent explicit form `$rPg@{id}: subtitle` + `$~ …` is still accepted, where the text after the ID is likewise the revision subtitle. The ID never changes; prior revisions remain history.
 
 ## Generation and hooks
 

@@ -2,6 +2,7 @@ package docs
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -50,7 +51,7 @@ func Parse(path, source string) ([]Finding, error) {
 			f.ID = firstField(payload)
 		}
 		if kind == "revision" {
-			f.ID, f.Title = splitRevision(payload)
+			f.ID, f.Subtitle = splitRevision(payload)
 			if f.ID == "" {
 				return nil, fmt.Errorf("%s:%d: $rPg@ requires an article ID", path, i+1)
 			}
@@ -62,6 +63,7 @@ func Parse(path, source string) ([]Finding, error) {
 			}
 		}
 		j := i + 1
+		var backlink string
 		for j < len(lines) {
 			b, ok := commentBody(lines[j], prefix)
 			if !ok {
@@ -72,16 +74,33 @@ func Parse(path, source string) ([]Finding, error) {
 				j++
 				continue
 			}
-			// A "~ <ref>" line is an inert web/docs backlink emitted by a
-			// previous generation; skip it so it is neither treated as prose
-			// nor absorbed into a following quoted region.
+			// "$# ..." sets a revision subtitle when written under an existing
+			// generated marker (inline revision).
+			if strings.HasPrefix(b, "$#") {
+				f.Subtitle = strings.TrimSpace(b[2:])
+				j++
+				continue
+			}
+			// A "~ <ref>" line is a web/docs backlink emitted by a previous
+			// generation; skip it so it is neither treated as prose nor
+			// absorbed into a following quoted region, but remember the first
+			// one so an inline revision can recover the article ID from it.
 			if strings.HasPrefix(b, "~") {
+				if backlink == "" {
+					backlink = strings.TrimSpace(strings.TrimPrefix(b, "~"))
+				}
 				j++
 				continue
 			}
 			break
 		}
 		f.BodyStart = j
+		// A generated (stable) marker that has since picked up $~/$# content is
+		// a pending inline revision; recover its article ID from the backlink.
+		if kind == "stable" && (len(f.Markdown) > 0 || f.Subtitle != "") {
+			kind, f.Kind = "revision", "revision"
+			f.ID = idFromRef(backlink)
+		}
 		if kind == "quote" || kind == "stable" || kind == "revision" {
 			end := -1
 			for k := j; k < len(lines); k++ {
@@ -168,6 +187,15 @@ func marker(s string) (string, string) {
 		return "end", ""
 	}
 	return "", ""
+}
+// idFromRef recovers an article ID from a backlink, whether a web permalink
+// (".../a/{id}") or a docs path (".../{id}.md"). IDs are base64url and contain
+// no "." or "/", so the last path segment minus a ".md" suffix is the ID.
+func idFromRef(ref string) string {
+	if ref == "" {
+		return ""
+	}
+	return strings.TrimSuffix(path.Base(ref), ".md")
 }
 func firstField(s string) string {
 	if fields := strings.Fields(s); len(fields) > 0 {

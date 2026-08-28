@@ -322,7 +322,11 @@ func appendRevision(path string, f Finding, record manifestArticle) error {
 	revision := record.Revision + 1
 	content := revisionMetadata.ReplaceAllString(string(b), fmt.Sprintf("| Revision | %d |", revision))
 	var add strings.Builder
-	fmt.Fprintf(&add, "\n# Revision %d\n\n", revision)
+	if f.Subtitle != "" {
+		fmt.Fprintf(&add, "\n# Revision %d — %s\n\n", revision, f.Subtitle)
+	} else {
+		fmt.Fprintf(&add, "\n# Revision %d\n\n", revision)
+	}
 	if len(f.Markdown) > 0 {
 		add.WriteString(strings.Join(f.Markdown, "\n"))
 		add.WriteString("\n")

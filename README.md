@@ -71,7 +71,8 @@ Two marker families, both written as ordinary language comments:
 | `$rPg: Title` or `$rPg(Category/Title, tag, tag)` | Start a **standalone article**. Continuation lines use `$~`. |
 | `?rPg: Title` or `?rPg(Category/Title, tag, tag)` … `!rPg` | Start a **quoted-code article**. Everything between the marker and the closing `!rPg` is captured verbatim (with safe common indentation stripped) and rendered under the article as `## Documented code`. Continuation lines use `?~`. |
 | `rPg: {title}` + `~ {backlink}` lines | What the tool rewrites your marker into after first generation: the title, plus `~` backlinks to the web article and/or the local Markdown file. The `$~`/`?~` prose is moved into the article. Stable; edit the title freely, leave the `~` lines to the tool. |
-| `$rPg@{id}: New title, tag` + `$~` lines | Append a **new revision** to an existing article. Required whenever a tracked quote's code changes. |
+| `$#` + `$~` lines under a generated marker | Append a **new revision** the fast way: leave the `rPg:`/`~` marker in place and write `$# subtitle` (optional) plus `$~` body lines beneath it. The id is recovered from the `~` backlink. The subtitle labels *Revision N* without changing the article's title. |
+| `$rPg@{id}: subtitle` + `$~` lines | The explicit revision form (equivalent to the above); the text after the id becomes the revision's subtitle. |
 
 A worked example, straight out of this repository's own demo fixtures:
 

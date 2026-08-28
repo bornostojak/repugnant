@@ -47,7 +47,7 @@ func TestParseSkipsBacklinkLines(t *testing.T) {
 // between, which previously produced a false quote-drift error and a
 // corrupted source range.
 func TestParseStableArticleDoesNotAbsorbLaterQuote(t *testing.T) {
-	src := "package p\n\n// rPg: abc123\n// $~ already generated\nfunc A() {}\n\nfunc B() {\n  // ?rPg: Quoted\n  // ?~ explain\n  work()\n  // !rPg\n}\n"
+	src := "package p\n\n// rPg: abc123\n// ~ docs/abc123.md\nfunc A() {}\n\nfunc B() {\n  // ?rPg: Quoted\n  // ?~ explain\n  work()\n  // !rPg\n}\n"
 	got, err := Parse("f.go", src)
 	if err != nil {
 		t.Fatal(err)
@@ -60,5 +60,32 @@ func TestParseStableArticleDoesNotAbsorbLaterQuote(t *testing.T) {
 	}
 	if got[1].Kind != "quote" || got[1].Quote != "work()" {
 		t.Fatalf("independent quote must be parsed on its own, got %+v", got[1])
+	}
+}
+
+// A clean marker that has picked up "$# subtitle" / "$~ body" lines under its
+// backlink is a pending inline revision: it reclassifies to a revision whose ID
+// is recovered from the backlink, keeping the code below untouched.
+func TestParseInlineRevisionFromBacklink(t *testing.T) {
+	src := "// rPg: Cache guard\n// ~ http://host/a/abc123\n// ~ ../docs/abc123.md\n// $# tightened the lock\n// $~ now uses striped locks\nwork()\n"
+	got, err := Parse("f.go", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 finding, got %d: %+v", len(got), got)
+	}
+	f := got[0]
+	if f.Kind != "revision" {
+		t.Fatalf("expected reclassification to revision, got %q", f.Kind)
+	}
+	if f.ID != "abc123" {
+		t.Fatalf("ID should come from the first backlink, got %q", f.ID)
+	}
+	if f.Subtitle != "tightened the lock" {
+		t.Fatalf("subtitle = %q", f.Subtitle)
+	}
+	if len(f.Markdown) != 1 || f.Markdown[0] != "now uses striped locks" {
+		t.Fatalf("body = %+v", f.Markdown)
 	}
 }
