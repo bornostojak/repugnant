@@ -60,7 +60,20 @@ func Push(root string) (int, error) {
 		}
 		n++
 	}
+	if err := clearPending(root); err != nil {
+		return n, err
+	}
 	return n, nil
+}
+
+// clearPending removes the pending-publish diagnostic after a successful push.
+// A missing file is not an error.
+func clearPending(root string) error {
+	err := os.Remove(filepath.Join(root, ".rpg", "pending.json"))
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("clear pending publish state: %w", err)
+	}
+	return nil
 }
 
 // PendingRecord is the compact diagnostic RecordPending writes and LoadPending
