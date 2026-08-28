@@ -1,0 +1,18 @@
+# rePugnant project configuration
+# Add an explicit list (for example: [go, typescript]) to override language auto-detection.
+version: 1
+langs: []
+
+output:
+  # Commit this directory when local documentation is the official output.
+  docs:
+    enabled: true
+    dir: docs
+  # Web publishing is staged locally and sent by the pre-push hook.
+  web:
+    enabled: false
+    # endpoint: http://127.0.0.1:8080
+
+hooks:
+  # block is the safe non-interactive default; allow_pending lets a push proceed after failure.
+  on_publish_failure: block
