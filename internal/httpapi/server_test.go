@@ -47,6 +47,13 @@ func TestProjectArticleAndShortRedirect(t *testing.T) {
 	}
 	var a map[string]any
 	_ = json.Unmarshal(article.Body.Bytes(), &a)
+	// An article pushed without tags must list its tags as "[]", never "null":
+	// the web UI JSON.parses this field and would crash calling .join on null.
+	untagged := httptest.NewRecorder()
+	server.ServeHTTP(untagged, httptest.NewRequest(http.MethodGet, "/api/projects/test-project/articles", nil))
+	if !strings.Contains(untagged.Body.String(), `"tags":"[]"`) || strings.Contains(untagged.Body.String(), `"tags":"null"`) {
+		t.Fatalf("article without tags must list tags as \"[]\": %s", untagged.Body.String())
+	}
 	redirect := httptest.NewRecorder()
 	server.ServeHTTP(redirect, httptest.NewRequest(http.MethodGet, "/"+a["short_id"].(string), nil))
 	if redirect.Code != http.StatusFound {

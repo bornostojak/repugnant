@@ -69,3 +69,39 @@ func TestAddArticleRefreshesSourceRangeWithoutNewRevision(t *testing.T) {
 		t.Fatalf("stored source_range was not refreshed, got %q", stored.SourceRange)
 	}
 }
+
+// TestNormalizeTagsNeverYieldsNull guards the web crash where an article pushed
+// with no tags serialized to the string "null", which JSON.parse turned into a
+// null the UI then called .join on. Empty/nil/null tags must become "[]".
+func TestNormalizeTagsNeverYieldsNull(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"null", "[]"},
+		{"", "[]"},
+		{"[]", "[]"},
+		{`["cache","go"]`, `["cache","go"]`},
+	} {
+		if got := normalizeTags(tc.in); got != tc.want {
+			t.Fatalf("normalizeTags(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestAddArticleWithoutTagsReturnsEmptyArray is the end-to-end guard: a stored
+// article created without tags reads back as "[]", never "null".
+func TestAddArticleWithoutTagsReturnsEmptyArray(t *testing.T) {
+	s, err := Open("sqlite", "file:store-tags-test?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.CreateProject("Tags Project", "tags-project"); err != nil {
+		t.Fatal(err)
+	}
+	a, err := s.AddArticle(Article{ID: "art1", ProjectSlug: "tags-project", Title: "No tags", Body: "body", Revision: 1, Tags: "null"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Tags != "[]" {
+		t.Fatalf("tags = %q, want \"[]\"", a.Tags)
+	}
+}

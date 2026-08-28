@@ -213,11 +213,20 @@ func (s *Store) FindArticleByID(id string) (Article, error) {
 	e := s.db.QueryRow(s.q(`SELECT id,short_id,project_slug,title,body,category,tags,source_path,source_range,revision,created_at FROM articles WHERE id=?`), id).Scan(&a.ID, &a.ShortID, &a.ProjectSlug, &a.Title, &a.Body, &a.Category, &a.Tags, &a.SourcePath, &a.SourceRange, &a.Revision, &a.CreatedAt)
 	return a, e
 }
+// normalizeTags stores tags as a canonical JSON array. A nil/`null`/empty value
+// becomes `[]` (never the string "null") so the web UI can always JSON.parse it
+// into an array without crashing on a null result.
 func normalizeTags(tags string) string {
 	var values []string
 	if json.Unmarshal([]byte(tags), &values) == nil {
+		if values == nil {
+			values = []string{}
+		}
 		b, _ := json.Marshal(values)
 		return string(b)
+	}
+	if tags == "" {
+		return "[]"
 	}
 	return tags
 }

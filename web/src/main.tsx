@@ -10,7 +10,13 @@ const json = <T,>(url: string, init?: RequestInit) => fetch(url, init).then(asyn
   if (!response.ok) throw new Error(await response.text() || response.statusText)
   return response.json() as Promise<T>
 })
-const tags = (article: Article) => { try { return JSON.parse(article.tags || '[]') as string[] } catch { return [] } }
+const tags = (article: Article) => { try { const parsed = JSON.parse(article.tags || '[]'); return Array.isArray(parsed) ? parsed as string[] : [] } catch { return [] } }
+// projectConfig renders the exact rpg.conf.yaml block a new project needs.
+const projectConfig = (project: CreatedProject) => {
+  const origin = window.location.origin
+  const apiURL = project.api_url.startsWith('/') ? origin + project.api_url : project.api_url
+  return `output:\n  web:\n    enabled: true\n    endpoint: ${origin}\nproject:\n  slug: ${project.slug}\n  api_url: ${apiURL}\n  api_key: ${project.api_key}`
+}
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -22,6 +28,7 @@ function App() {
   const [view, setView] = useState<'docs' | 'source'>('docs')
   const [newName, setNewName] = useState('')
   const [created, setCreated] = useState<CreatedProject | null>(null)
+  const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
   // A stable link (/p/{slug}/article/{id}/{revision}, pushed by select()
   // below) only works if a direct visit or page refresh restores that exact
@@ -45,13 +52,24 @@ function App() {
   }, [articles, deepLink, active, selected])
   const grouped = useMemo(() => articles.reduce<Record<string, Article[]>>((all, article) => { const key = article.category || 'Uncategorised'; (all[key] ||= []).push(article); return all }, {}), [articles])
   const select = (article: Article) => { setSelected(article); setView('docs'); json<Article[]>(`/api/projects/${active}/articles/${article.id}/revisions`).then(setRevisions).catch(e => setError(String(e))); history.replaceState({}, '', `/p/${active}/article/${article.id}/${article.revision}`) }
-  const createProject = (event: FormEvent) => { event.preventDefault(); setError(''); json<CreatedProject>('/api/projects', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:newName}) }).then(result => { setCreated(result); setNewName(''); refreshProjects(); setActive(result.slug) }).catch(e => setError(String(e))) }
+  const createProject = (event: FormEvent) => { event.preventDefault(); setError(''); json<CreatedProject>('/api/projects', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:newName}) }).then(result => { setCreated(result); setCopied(false); setNewName(''); refreshProjects(); setActive(result.slug) }).catch(e => setError(String(e))) }
+  const copyConfig = () => { if (created) void navigator.clipboard?.writeText(projectConfig(created)).then(() => setCopied(true)).catch(() => setCopied(false)) }
   const saveOrganization = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!selected) return; const form = new FormData(event.currentTarget); const category = String(form.get('category') || ''); const nextTags = String(form.get('tags') || '').split(',').map(value => value.trim()).filter(Boolean); json<Article>(`/api/projects/${active}/articles/${selected.id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({category, tags:nextTags})}).then(updated => { setSelected(updated); refreshArticles() }).catch(e => setError(String(e))) }
   return <main className="shell">
     <header className="topbar"><a className="brand" href="/">rPg</a><span>Documentation that stays close to code</span><nav><button className={view==='docs'?'selected':''} onClick={() => setView('docs')}>Docs</button><button className={view==='source'?'selected':''} onClick={() => setView('source')}>Source</button></nav></header>
     {error && <p className="notice" role="alert">{error}</p>}
     <section className="home-intro"><div><p className="eyebrow">Project wiki</p><h1>Understand the codebase without leaving its structure behind.</h1><p>Browse published documentation, source locations, tags, categories, and revision history.</p></div><form className="new-project" onSubmit={createProject}><label>New project<input required value={newName} onChange={e => setNewName(e.target.value)} placeholder="My service" /></label><button type="submit">Create project</button></form></section>
-    {created && <section className="credential" aria-live="polite"><strong>{created.slug} is ready.</strong> Copy this API key now; it is only returned on creation. <code>{created.api_key}</code><p>Add <code>project.api_url: {created.api_url}</code> and the key to that project’s <code>rpg.conf.yaml</code>.</p></section>}
+    {created && <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setCreated(null)}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h2>Project “{created.slug}” is ready</h2>
+        <p className="muted">Paste this into the project’s <code>rpg.conf.yaml</code>, then run <code>rpg generate</code> and <code>rpg push</code>. The API key is shown <strong>only once</strong> — copy it now.</p>
+        <pre className="config">{projectConfig(created)}</pre>
+        <div className="modal-actions">
+          <button type="button" onClick={copyConfig}>{copied ? 'Copied ✓' : 'Copy config'}</button>
+          <button type="button" className="ghost" onClick={() => setCreated(null)}>Done</button>
+        </div>
+      </div>
+    </div>}
     <section className="workspace">
       <aside className="sidebar"><label>Project<select value={active} onChange={e=>{setActive(e.target.value);setSelected(null)}}><option value="">Choose a project</option>{projects.map(project => <option value={project.slug} key={project.slug}>{project.name}</option>)}</select></label><label>Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Titles, contents, tags" /></label><div className="tree"><h2>Documentation</h2>{Object.entries(grouped).map(([category, items]) => <section key={category}><h3>{category.split('/').join(' › ')}</h3>{items.map(article => <button className={selected?.id===article.id?'active':''} onClick={() => select(article)} key={article.id}>{article.title}</button>)}</section>)}</div></aside>
       <section className="content">{!active ? <p>Select or create a project to begin.</p> : !selected ? <p>Select an article from the documentation tree.</p> : view === 'source' ? <SourceView article={selected} /> : <ArticleView article={selected} revisions={revisions} onRevision={setSelected} />}</section>
